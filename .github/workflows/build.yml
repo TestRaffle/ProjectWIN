@@ -22,7 +22,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install nuitka pyside6 playwright pycryptodome pillow ordered-set zstandard
+        pip install nuitka pyside6 playwright pycryptodome pillow ordered-set zstandard openpyxl
         playwright install chromium
     
     - name: Build with Nuitka
@@ -43,11 +43,8 @@ jobs:
         rem exeの名前を変更
         ren release\GUI.exe ProjectWIN.exe
         
-        rem _internalフォルダを作成
+        rem _internalフォルダを作成（botsはサーバーからDLするので不要）
         mkdir release\_internal
-        mkdir release\_internal\bots
-        mkdir release\_internal\bots\amazon
-        mkdir release\_internal\bots\icloud
         mkdir release\_internal\settings
         mkdir release\_internal\cookies
         mkdir release\_internal\cookies\Amazon
