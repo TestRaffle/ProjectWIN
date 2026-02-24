@@ -34,8 +34,6 @@ jobs:
           --enable-plugin=pyside6 ^
           --include-data-dir=./_internal=_internal ^
           --output-filename=ProjectWIN.exe ^
-          --company-name="Project WIN" ^
-          --product-name="Project WIN" ^
           GUI.py
       shell: cmd
     
