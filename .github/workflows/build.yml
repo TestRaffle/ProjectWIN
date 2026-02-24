@@ -36,8 +36,6 @@ jobs:
           --output-filename=ProjectWIN.exe ^
           --company-name="Project WIN" ^
           --product-name="Project WIN" ^
-          --file-version=${{ github.ref_name }} ^
-          --product-version=${{ github.ref_name }} ^
           GUI.py
       shell: cmd
     
