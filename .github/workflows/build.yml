@@ -33,7 +33,6 @@ jobs:
           --windows-console-mode=attach ^
           --enable-plugin=pyside6 ^
           --include-data-dir=./_internal=_internal ^
-          --windows-icon-from-ico=icon.ico ^
           --output-filename=ProjectWIN.exe ^
           --company-name="Project WIN" ^
           --product-name="Project WIN" ^
