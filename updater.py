@@ -14,7 +14,7 @@ from pathlib import Path
 from urllib import request, error
 
 # 現在のバージョン
-CURRENT_VERSION = "1.0.0"
+CURRENT_VERSION = "0.0.1"
 
 # GitHub リポジトリ情報
 GITHUB_OWNER = "TestRaffle"
