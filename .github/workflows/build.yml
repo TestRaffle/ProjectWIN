@@ -32,6 +32,11 @@ jobs:
           --windows-console-mode=attach ^
           --enable-plugin=pyside6 ^
           --assume-yes-for-downloads ^
+          --include-module=requests ^
+          --include-module=urllib3 ^
+          --include-module=charset_normalizer ^
+          --include-module=certifi ^
+          --include-module=idna ^
           GUI.py
       shell: cmd
     
