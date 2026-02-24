@@ -1,0 +1,10 @@
+{
+  "sites": [
+    {
+      "site_id": "yescaptcha",
+      "site_name": "YesCaptcha",
+      "token": "9b16029241fe9a2224044badd291e4b0cdb422c376941",
+      "selected": true
+    }
+  ]
+}

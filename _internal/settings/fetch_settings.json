@@ -1,0 +1,16 @@
+{
+  "accounts": [
+    {
+      "title": "Main",
+      "imap_server": "imap.gmail.com",
+      "imap_port": 993,
+      "email": "mamo.0920.dior@gmail.com",
+      "password": "pilv inoj ojlo mekl",
+      "selected": true
+    }
+  ],
+  "imap_server": "imap.gmail.com",
+  "imap_port": 993,
+  "email": "mamo.0920.dior@gmail.com",
+  "password": "pilv inoj ojlo mekl"
+}

@@ -1,0 +1,6 @@
+{
+  "parallel_count": 10,
+  "task_delay": 0,
+  "fetch_wait_time": 60,
+  "retry_count": 5
+}

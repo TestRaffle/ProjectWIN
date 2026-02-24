@@ -1,0 +1,192 @@
+[
+  {
+    "name": "x-apple-group",
+    "value": "false",
+    "domain": "www.icloud.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "X-APPLE-WEBAUTH-USER",
+    "value": "\"v=1:s=1:d=19140144340\"",
+    "domain": ".icloud.com",
+    "path": "/",
+    "expires": 1774414856.63586,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "X_APPLE_WEB_KB-EHGK3DLTBHIISWHPA46HLNCFR4O",
+    "value": "\"v=1:t=BQ==BST_IAAAAAAABLwIAAAAAGmb3vgRDmdzLmljbG91ZC5hdXRovQDhXy1hLAUGnNOKOt98QfjANsbcnybpR_29BuXKlOcFI8BSJXORIAAmM_spWiUnGyqCJeWl_NOmmPMZBNpuXee1M8jL3MQ_Sw9RuC__TbBnEmSvp0a_id1c0JHI38KNLQkKeXG7ZL1bqz67tiaKGqzw6q9b0g~~\"",
+    "domain": ".icloud.com",
+    "path": "/",
+    "expires": 1777006840.70914,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "X-APPLE-WEBAUTH-HSA-TRUST",
+    "value": "\"473b3872a3b28c5c6b532e23318dbde776a32d6aa2416a78f7817bb5777bb053_HSARMTKNSRVXWFlaMDqSkNMZGSII55VgRHOQtf1FcN9JHvQrM3lZtN8H/Isk3dyusvei2qJUvvq3mZgEPrAN5QujIxqfsm4it/JinGisyyUNsUeSQswnv4fckZ9d1Nitz6lWUFBleO+j0InGFeH+tXVCMRLa/yYj2qcxNFGaaHa1vbKHh+QUDrnFt4r9pkUMJmw=SRVX\"",
+    "domain": ".icloud.com",
+    "path": "/",
+    "expires": 1779598855.635324,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "X-APPLE-WEBAUTH-PCS-Events",
+    "value": "\"S2V5QXBwbDoBAAAA8QYAAAACW3mi4/nnqFDO67CxzMCx+e+Hpin9FXcEKGi6MhMzYw==\"",
+    "domain": ".icloud.com",
+    "path": "/",
+    "expires": 1774414856.635414,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "X-APPLE-WEBAUTH-PCS-Documents",
+    "value": "\"S2V5QXBwbDoBAAAAAgYAAABuXawIqE9mJmHv+q6ogew9kL9Qr3UleqVne+0GjlZsKg==\"",
+    "domain": ".icloud.com",
+    "path": "/",
+    "expires": 1774414856.635445,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "X-APPLE-WEBAUTH-PCS-Photos",
+    "value": "\"S2V5QXBwbDoBAAAAAwYAAACZYbMkSBDw8+ULpRNG039hXDzAgS/8SvoXMOgYt0O1Xg==\"",
+    "domain": ".icloud.com",
+    "path": "/",
+    "expires": 1774414856.63547,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "X-APPLE-WEBAUTH-PCS-Cloudkit",
+    "value": "\"S2V5QXBwbDoBAAAABAYAAACZZJE0lV/8MHAKbxvSDAz1F4mEXJ5ZiE3ZwyeSFEWujw==\"",
+    "domain": ".icloud.com",
+    "path": "/",
+    "expires": 1774414856.635493,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "X-APPLE-WEBAUTH-PCS-Safari",
+    "value": "\"S2V5QXBwbDoBAAAAFgYAAABvh6M+OlJC3AZlDR3mYd8XhjhRnBXpKyOCeFDiBCP+sg==\"",
+    "domain": ".icloud.com",
+    "path": "/",
+    "expires": 1774414856.635517,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "X-APPLE-WEBAUTH-PCS-Mail",
+    "value": "\"S2V5QXBwbDoBAAAABwYAAACBcVzi14IS8BOP11HDrDKhc6EiB1wkavLSDGCxdAmdJA==\"",
+    "domain": ".icloud.com",
+    "path": "/",
+    "expires": 1774414856.63555,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "X-APPLE-WEBAUTH-PCS-Notes",
+    "value": "\"S2V5QXBwbDoBAAAACQYAAABIw2rqYJ8dZeRzZp4S+ci16U3eWdWaadLd0NfuA2n/mg==\"",
+    "domain": ".icloud.com",
+    "path": "/",
+    "expires": 1774414856.635574,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "X-APPLE-WEBAUTH-PCS-News",
+    "value": "\"S2V5QXBwbDoBAAAACwYAAACfu0TYhhADHLlY//T2fWKFK+iMBm2LR84I+0KIhl+tUQ==\"",
+    "domain": ".icloud.com",
+    "path": "/",
+    "expires": 1774414856.635601,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "X-APPLE-WEBAUTH-PCS-Sharing",
+    "value": "\"S2V5QXBwbDoBAAAADAYAAAC0PEmqGKx1xuOGTzht+NO9rfjKb2P/vn2XOCGfMSxlZw==\"",
+    "domain": ".icloud.com",
+    "path": "/",
+    "expires": 1774414856.635624,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "X-APPLE-UNIQUE-CLIENT-ID",
+    "value": "\"Bg==\"",
+    "domain": ".icloud.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "X-APPLE-WEBAUTH-LOGIN",
+    "value": "\"v=1:t=Bg==BST_IAAAAAAABLwIAAAAAGmb3wcRDmdzLmljbG91ZC5hdXRovQD9AecTwrWuzc7ndrHKnfqL--f5Ydg2slmOV-Jyzd-yqeiKZhiSUsnDKblnVhsyKQzZw0dCwpQb3cv23HNHg5GlfiWRHZAEYwmeIkcWeZ8TRDDbtkUsm9nBUryWbGJgNBOE7ckSALoCVlRCURTm9Qz9d5kQUw~~\"",
+    "domain": ".icloud.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "X-APPLE-WEBAUTH-VALIDATE",
+    "value": "\"v=1:t=Bg==BST_IAAAAAAABLwIAAAAAGmb3wcRDmdzLmljbG91ZC5hdXRovQD9AecTwrWuzc7ndrHKnfqL--f5Ydg2slmOV-Jyzd-yqeiKZhiSUsnDKblnVhsyKQzZw0dCwpQb3cv23HNHg5GlfiWRHZAEYwmeIkcWeZ8TRGUIKiJNUwieMDZR3BPBMHc2bd5K7g11ilwgJ32Tq2lT7uea6w~~\"",
+    "domain": ".icloud.com",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "X-APPLE-DS-WEB-SESSION-TOKEN",
+    "value": "\"AQE6+v+HoUjXxUhh5hRtan1M2xtjJF9VxNUKmVym8jY/1+V0LUsA30j6VJF+zLlcrFxlwHv701f1AVuqvV94sPsllaU7SD4Z9BYO6muweILYGplAAll+JIxhpZ3FvTZ3fWKqoNDmhB+de4W80L1x738bmJbQZYlFlQwnag82bAQ7+26z8vnS84zbLFS7B8UA0bUJJ3H4b9AgSypgM1CMcGPgJqJ+B/aeUCOgj4p7j+ugDZ7kkoq6+HHNMeaFQ2FO2YXsvLNKKgzAUo6Qw0q3qEwHXuSHTtKuZRFxKdf9fhCb7myTe9gNQLj+ikYHcsJ0nXtCOfj2FRJma22za7Tf8agxWYo4wNY1f9fepkT/SyRL07QBwN8+mqT73nqUfPsQxTHmNUIpXSxmbnxuEr4YzkPpHmQDRvNsE+zCZWMEtbQtHjItBknqwCRgkCjB6vhaafx9oF+mxNhX5/5yqOn8RNbahwHpl2+dxIr1nkPLJCf9kCMiN8OJJLvu0H+NVismFIMtnnYPaJhGRUluAO8a/nJ2YRJskuHnIVmKzBjvmWD1l7PvROZNqPZrjJGLPJ2UaBox4/wmhWx++p8NIfah1ucWgfLzx8EZ09wJFXpZrLhzysE4oLRX7uJA9XVxMKVi3jeCSbPP9KJo5RvGYMwc/3uSgm2QyR7OMNNlFKgrnnkewbVzE3i99hFa6yujLQRlqfbLe3zkfZul/RXVQ2dFW/r1yV5y8l3Bc7fvBFYc2A0W2cc53SCqZLABW5ylRfGst+9Mbbo7aqieYNCTBCIKmm/PSHjvTRqbhj3AjA==\"",
+    "domain": ".icloud.com",
+    "path": "/",
+    "expires": 1774414856.635899,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "X-APPLE-WEB-ID",
+    "value": "3B4AD400B2EF18EBDB9B860B9FB19700D0F2D69D",
+    "domain": ".icloud.com",
+    "path": "/",
+    "expires": 1773032456,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "X-APPLE-WEBAUTH-TOKEN",
+    "value": "\"v=2:t=Bg==BST_IAAAAAAABLwIAAAAAGmb3w4RDmdzLmljbG91ZC5hdXRovQDN60tdTjdSYAx6htToe_GT_OHnSKudbZRENbJ4ENO1RxbGtq1YjP9O-PrrF8Pl7j1PznMorojchekOSOG-mZwxp-8E2cuXciq9Jpqe5VPm0b5iKQCRnXSMWHl8sUkXUHBj0Ky3PFKHK7Di1fchGvDRWrA-mg~~\"",
+    "domain": ".icloud.com",
+    "path": "/",
+    "expires": 1774414862.212478,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  }
+]

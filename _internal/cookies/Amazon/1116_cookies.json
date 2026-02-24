@@ -1,0 +1,142 @@
+[
+  {
+    "name": "session-id",
+    "value": "356-0372941-8970664",
+    "domain": ".amazon.co.jp",
+    "path": "/",
+    "expires": 1802150144.87118,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "i18n-prefs",
+    "value": "JPY",
+    "domain": ".amazon.co.jp",
+    "path": "/",
+    "expires": 1802150144.871491,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "lc-acbjp",
+    "value": "ja_JP",
+    "domain": ".amazon.co.jp",
+    "path": "/",
+    "expires": 1802150144.871535,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "ubid-acbjp",
+    "value": "356-8595323-4716366",
+    "domain": ".amazon.co.jp",
+    "path": "/",
+    "expires": 1802150144.87129,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "sso-state-acbjp",
+    "value": "Xdsso|ZQGyBVYiKEPq_tT4-a48IVUEN9CfwS-2dzQ3oaeZ1JFheKMah-yIndOU_sLMZLrUChZrx-vAcVY7XlODCY7R6EGq5OXrCAWbExNbhnYw5D4KNykB",
+    "domain": ".amazon.co.jp",
+    "path": "/",
+    "expires": 1805174144.219448,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "None"
+  },
+  {
+    "name": "at-acbjp",
+    "value": "Atza|gQB9ZiPEAQEBAajwMGievuVz4vjL2CAItv6-eeE43iO0PHlKKRi-mdIfxR_QE0Vy4UWIP3IW74EOMnnja3LySBME190s7t3ak17ckP6v2wWZ04a-UGo73Jk-HTlQidTONFSwRzdZHQjOV4r1sQWFJjMgjwQ6RBgOD1LSITEm834J_9VBxWsOBoUqZnk-r2vMRPgMhei2vIycDkKErWlKVipe0Ijg8gp_Sr2tTyaM3NStjTUR5XKf0GcM2yMFhMBF2KelLMpV4EB9yIL0j1ySt2x2SabU5-uKSwGL7mfFBLjhp99cKuX4xZ3Id3U9WTY1l9A4gYjK2AuNesCA6ZM_45s6umGBsrvQ",
+    "domain": ".amazon.co.jp",
+    "path": "/",
+    "expires": 1802150143.219944,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "sess-at-acbjp",
+    "value": "A3Q17BRUyTRmSW8ZeDgKzVizywIb7bnjN06y8yEY50I=",
+    "domain": ".amazon.co.jp",
+    "path": "/",
+    "expires": 1802150143.220039,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "sst-acbjp",
+    "value": "Sst1|PQJ4KJG3MW5Kc5t_L2RVfGawCaU7nb6eRCZ9z9Bz58Gj1E6F929bO3Oy9JIba2-8phCASmOBWBRcGwIUUKJAgmn95rAnY0KBkLXcpZAYDveErrwZMe729c-CRPnMaTwosINt2LpMftmfAhd0yPmVo5nYuvSlZxwbZhTUBLlyHhRqf3R8K-hpTMJlcrq7zVhg0Y8WxntUBUjXdDWjRrXaBgaK7trO2tUJdOUreZ0DdNNtA2U67MG5jpn4ouhwgOMvCdTVr1OM50DukBgiDZJqhmWkHWUXYzsq-TOsgG0GmMaE670",
+    "domain": ".amazon.co.jp",
+    "path": "/",
+    "expires": 1802150143.220087,
+    "httpOnly": true,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "session-id-time",
+    "value": "2082787201l",
+    "domain": ".amazon.co.jp",
+    "path": "/",
+    "expires": 1802150144.871395,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "rxc",
+    "value": "AOfMX9bYPtuP0iOwSuQ",
+    "domain": "www.amazon.co.jp",
+    "path": "/",
+    "expires": 1770711917.094464,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "skin",
+    "value": "noskin",
+    "domain": ".amazon.co.jp",
+    "path": "/",
+    "expires": -1,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "session-token",
+    "value": "\"/dt1VjX8/1b0LsETyW/ng43686oZf5zGc39wfGkjIQtdOTWqchfJVPEOTA6d68lGGGKzbU6AbwWhG97qejBsxcGhNmv2Ln66T8+b/rHeA95HC5XCJ/tnPgwUQvKjH3qXD9KfEGy9oi5bkXzcFkI5Mjstc5qwgM9h6Qro6NXLFVWTmT2V1EgL9KmutGgPxh/fZm6qCUIh2xQXQwOWn1RLdfsYkNE6ZxhDhaKoGVsWT1h+YsK/WP2sRDSlVanCoLpGLpx/ResESfWwdts7wMUgFrjUyDNZ77JM5eJHxKgComWMp/cEpIU5diINIVM7MNnSMckwBro5NZt3toaodKtjg1D9UPEhtrGqD8UM9FcC+WAVgv/3jQhsy2T/BLOxwckunQbZZ/mt5hU=\"",
+    "domain": ".amazon.co.jp",
+    "path": "/",
+    "expires": 1802162330.582831,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "x-acbjp",
+    "value": "\"ZIDOMbKSOfFEauAReYK2DWYLPWgLtKGTof6peL@5L4IbBRUHYIOYf9czL7g3mobm\"",
+    "domain": ".amazon.co.jp",
+    "path": "/",
+    "expires": 1802162330.582959,
+    "httpOnly": false,
+    "secure": true,
+    "sameSite": "Lax"
+  },
+  {
+    "name": "csm-hit",
+    "value": "tb:s-HZXQ12DR7S9Z109FH3NH|1770626379158&t:1770626379692&adb:adblk_no",
+    "domain": "www.amazon.co.jp",
+    "path": "/",
+    "expires": 1800866379,
+    "httpOnly": false,
+    "secure": false,
+    "sameSite": "Lax"
+  }
+]

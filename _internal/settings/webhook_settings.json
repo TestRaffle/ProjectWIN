@@ -1,0 +1,10 @@
+{
+  "enabled": true,
+  "webhooks": [
+    {
+      "title": "Main",
+      "url": "https://discord.com/api/webhooks/1105718640910794791/4142Gt_Z3czYzHS7SINSz8h_4eYV-KfH93l6biHLLWFJsqUe2WaMNN_9GK7wY5OCVsRH",
+      "selected": true
+    }
+  ]
+}

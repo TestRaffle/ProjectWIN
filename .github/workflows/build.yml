@@ -1,0 +1,71 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'  # v1.0.0 のようなタグがpushされた時に実行
+  workflow_dispatch:  # 手動実行も可能
+
+jobs:
+  build:
+    runs-on: windows-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.12'
+    
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install nuitka pyside6 playwright pycryptodome pillow ordered-set zstandard
+        playwright install chromium
+    
+    - name: Build with Nuitka
+      run: |
+        python -m nuitka ^
+          --standalone ^
+          --onefile ^
+          --windows-console-mode=attach ^
+          --enable-plugin=pyside6 ^
+          --include-data-dir=./_internal=_internal ^
+          --windows-icon-from-ico=icon.ico ^
+          --output-filename=ProjectWIN.exe ^
+          --company-name="Project WIN" ^
+          --product-name="Project WIN" ^
+          --file-version=${{ github.ref_name }} ^
+          --product-version=${{ github.ref_name }} ^
+          GUI.py
+      shell: cmd
+    
+    - name: Prepare release files
+      run: |
+        mkdir release
+        copy ProjectWIN.exe release\
+        if exist _internal\settings xcopy /E /I _internal\settings release\_internal\settings
+        if exist _internal\bots xcopy /E /I _internal\bots release\_internal\bots
+      shell: cmd
+    
+    - name: Create ZIP
+      run: |
+        Compress-Archive -Path release\* -DestinationPath ProjectWIN-${{ github.ref_name }}.zip
+      shell: powershell
+    
+    - name: Upload artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: ProjectWIN-${{ github.ref_name }}
+        path: ProjectWIN-${{ github.ref_name }}.zip
+    
+    - name: Create Release
+      if: startsWith(github.ref, 'refs/tags/')
+      uses: softprops/action-gh-release@v1
+      with:
+        files: ProjectWIN-${{ github.ref_name }}.zip
+        generate_release_notes: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
