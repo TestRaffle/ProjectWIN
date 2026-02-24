@@ -3,8 +3,8 @@ name: Build and Release
 on:
   push:
     tags:
-      - 'v*'  # v1.0.0 のようなタグがpushされた時に実行
-  workflow_dispatch:  # 手動実行も可能
+      - 'v*'
+  workflow_dispatch:
 
 jobs:
   build:
@@ -32,7 +32,6 @@ jobs:
           --onefile ^
           --windows-console-mode=attach ^
           --enable-plugin=pyside6 ^
-          --include-data-dir=./_internal=_internal ^
           --output-filename=ProjectWIN.exe ^
           --assume-yes-for-downloads ^
           GUI.py
@@ -42,8 +41,15 @@ jobs:
       run: |
         mkdir release
         copy ProjectWIN.exe release\
-        if exist _internal\settings xcopy /E /I _internal\settings release\_internal\settings
-        if exist _internal\bots xcopy /E /I _internal\bots release\_internal\bots
+        mkdir release\_internal
+        mkdir release\_internal\bots
+        mkdir release\_internal\bots\amazon
+        mkdir release\_internal\bots\icloud
+        mkdir release\_internal\settings
+        mkdir release\_internal\cookies
+        mkdir release\_internal\cookies\Amazon
+        mkdir release\_internal\cookies\iCloud
+        echo {} > release\_internal\settings\app_config.json
       shell: cmd
     
     - name: Create ZIP
