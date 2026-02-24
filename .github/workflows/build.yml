@@ -29,18 +29,21 @@ jobs:
       run: |
         python -m nuitka ^
           --standalone ^
-          --onefile ^
           --windows-console-mode=attach ^
           --enable-plugin=pyside6 ^
-          --output-filename=ProjectWIN.exe ^
           --assume-yes-for-downloads ^
           GUI.py
       shell: cmd
     
     - name: Prepare release files
       run: |
-        mkdir release
-        copy ProjectWIN.exe release\
+        rem standaloneビルドの出力フォルダからコピー
+        xcopy /E /I GUI.dist release
+        
+        rem exeの名前を変更
+        ren release\GUI.exe ProjectWIN.exe
+        
+        rem _internalフォルダを作成
         mkdir release\_internal
         mkdir release\_internal\bots
         mkdir release\_internal\bots\amazon
@@ -49,7 +52,9 @@ jobs:
         mkdir release\_internal\cookies
         mkdir release\_internal\cookies\Amazon
         mkdir release\_internal\cookies\iCloud
-        echo {} > release\_internal\settings\app_config.json
+        
+        rem version.jsonを作成
+        echo {"version": "${{ github.ref_name }}"} > release\_internal\version.json
       shell: cmd
     
     - name: Create ZIP
