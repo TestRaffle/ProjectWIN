@@ -57,8 +57,10 @@ jobs:
         mkdir release\_internal\cookies\Amazon
         mkdir release\_internal\cookies\iCloud
         
-        rem version.jsonを作成
-        echo {"version": "${{ github.ref_name }}"} > release\_internal\version.json
+        rem version.jsonを作成（タグからvを除去）
+        set VERSION=${{ github.ref_name }}
+        set VERSION=%VERSION:v=%
+        echo {"version": "%VERSION%"} > release\_internal\version.json
       shell: cmd
     
     - name: Create ZIP
