@@ -14,7 +14,7 @@ from pathlib import Path
 from urllib import request, error
 
 # 現在のバージョン
-CURRENT_VERSION = "0.0.1"
+CURRENT_VERSION = "1.0.0"
 
 # GitHub リポジトリ情報
 GITHUB_OWNER = "TestRaffle"
@@ -38,7 +38,7 @@ def get_version_file():
     """バージョンファイルのパスを取得"""
     global VERSION_FILE
     if VERSION_FILE is None:
-        VERSION_FILE = get_app_dir() / "_internal" / "version.txt"
+        VERSION_FILE = get_app_dir() / "_internal" / "version.json"
     return VERSION_FILE
 
 
@@ -59,7 +59,14 @@ def get_current_version():
     try:
         version_file = get_version_file()
         if version_file.exists():
-            return version_file.read_text().strip()
+            content = version_file.read_text().strip()
+            # JSON形式の場合
+            if content.startswith('{'):
+                import json
+                data = json.loads(content)
+                return data.get('version', CURRENT_VERSION)
+            # プレーンテキストの場合
+            return content
     except:
         pass
     return CURRENT_VERSION
