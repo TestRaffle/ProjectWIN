@@ -91,6 +91,10 @@ def check_for_update():
         tuple: (needs_update, latest_version, download_url, changelog)
     """
     try:
+        print("Checking for updates...")
+        current_ver = get_current_version()
+        print(f"Current version: {current_ver}")
+        
         req = request.Request(
             RELEASES_API_URL,
             headers={
@@ -104,6 +108,7 @@ def check_for_update():
         
         latest_version = data.get('tag_name', '')
         changelog = data.get('body', '')
+        print(f"Latest version: {latest_version}")
         
         # ダウンロードURLを探す（.zipファイル）
         download_url = None
@@ -113,16 +118,23 @@ def check_for_update():
                 download_url = asset['browser_download_url']
                 break
         
+        print(f"Download URL: {download_url}")
+        
         # バージョン比較
-        current = parse_version(get_current_version())
+        current = parse_version(current_ver)
         latest = parse_version(latest_version)
         
+        print(f"Parsed current: {current}, latest: {latest}")
+        
         needs_update = latest > current
+        print(f"Needs update: {needs_update}")
         
         return needs_update, latest_version, download_url, changelog
         
     except Exception as e:
         print(f"Update check failed: {e}")
+        import traceback
+        traceback.print_exc()
         return False, None, None, None
 
 
