@@ -5829,15 +5829,22 @@ def main():
         print("License manager not found - running without license check")
     
     # ===== アップデートチェック =====
+    print(f"check_for_update function: {check_for_update}")
     if check_for_update is not None:
         try:
+            print("Calling check_for_update()...")
             needs_update, latest_version, download_url, changelog = check_for_update()
+            print(f"Result: needs_update={needs_update}, latest={latest_version}, url={download_url}")
             if needs_update and download_url:
                 update_dialog = UpdateDialog(latest_version, changelog)
                 update_dialog.exec()
                 # ユーザーが「あとで」を選んだ場合はそのまま続行
         except Exception as e:
             print(f"Update check failed: {e}")
+            import traceback
+            traceback.print_exc()
+    else:
+        print("check_for_update is None - skipping update check")
     
     # ===== メインウィンドウ起動 =====
     window = MainWindow()
