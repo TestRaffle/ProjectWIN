@@ -375,8 +375,13 @@ def get_app_version():
             version_path = APP_DIR / "version.json"
         
         if version_path.exists():
-            with open(version_path, 'r') as vf:
-                return json.load(vf).get("version", "0.0.0")
+            content = version_path.read_text().strip()
+            # JSON形式の場合
+            if content.startswith('{'):
+                data = json.loads(content)
+                return data.get("version", "0.0.0")
+            # プレーンテキストの場合（vプレフィックスを除去）
+            return content.lstrip('v').strip()
     except:
         pass
     return "0.0.0"
