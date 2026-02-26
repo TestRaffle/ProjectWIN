@@ -1593,9 +1593,9 @@ class TaskPage(QWidget):
             self.toast.show_toast("No file to reload", "warning", 2000)
     
     def load_excel(self):
-        """Excelファイルを読み込んでテーブルに表示"""
+        """Excel/CSVファイルを読み込んでテーブルに表示"""
         file_path, _ = QFileDialog.getOpenFileName(
-            self, "Excelファイルを選択", "", "Excel Files (*.xlsx *.xls)"
+            self, "ファイルを選択", "", "Excel/CSV Files (*.xlsx *.xls *.csv);;Excel Files (*.xlsx *.xls);;CSV Files (*.csv)"
         )
         
         if not file_path:
@@ -1604,13 +1604,13 @@ class TaskPage(QWidget):
         self._load_excel_file(file_path)
     
     def _load_excel_file(self, file_path, show_reload_toast=False, show_toast=True, sheet_name=None):
-        """指定されたExcelファイルを読み込む
+        """指定されたExcel/CSVファイルを読み込む
         
         Args:
-            file_path: Excelファイルのパス
+            file_path: Excel/CSVファイルのパス
             show_reload_toast: リロード時のトースト表示フラグ
             show_toast: トースト表示フラグ
-            sheet_name: 読み込むシート名（Noneの場合は最初のシート）
+            sheet_name: 読み込むシート名（Noneの場合は最初のシート、CSVでは無視）
         """
         EXCEL_COLUMNS = [
             "Profile", "Site", "Mode", "URL", "Proxy",
@@ -1623,65 +1623,137 @@ class TaskPage(QWidget):
         ]
         
         try:
-            wb = openpyxl.load_workbook(file_path)
+            # CSVファイルかどうか判定
+            is_csv = file_path.lower().endswith('.csv')
             
-            # シート名リストを取得
-            sheet_names = wb.sheetnames
-            
-            # シートセレクターを更新（シート名指定がない場合のみ）
-            if sheet_name is None:
-                self.current_sheet_names = sheet_names
+            if is_csv:
+                # CSV読み込み
+                import csv
+                
+                # シートセレクターを無効化（CSVにはシートがない）
+                self.current_sheet_names = []
                 self.sheet_selector.blockSignals(True)
                 self.sheet_selector.clear()
-                self.sheet_selector.addItems(sheet_names)
+                self.sheet_selector.addItem("(CSV)")
+                self.sheet_selector.setEnabled(False)
                 self.sheet_selector.blockSignals(False)
-            
-            # 指定されたシート、またはアクティブシートを選択
-            if sheet_name and sheet_name in sheet_names:
-                ws = wb[sheet_name]
+                
+                rows_data = []
+                # エンコーディングを試行（UTF-8 → Shift-JIS → CP932）
+                encodings = ['utf-8', 'utf-8-sig', 'shift-jis', 'cp932']
+                for encoding in encodings:
+                    try:
+                        with open(file_path, 'r', encoding=encoding, newline='') as f:
+                            reader = csv.reader(f)
+                            rows_data = list(reader)
+                        break
+                    except UnicodeDecodeError:
+                        continue
+                
+                if not rows_data:
+                    raise Exception("ファイルのエンコーディングを判定できませんでした")
+                
+                self.task_table.setRowCount(0)
+                self.workers.clear()
+                self.all_task_data = []
+                self.original_task_data = []
+                self.last_checked_row = None
+                
+                # カウンターをリセット
+                self.idle_count = 0
+                self.success_count = 0
+                self.failed_count = 0
+                
+                task_count = 0
+                
+                # ヘッダー行をスキップ（2行目から読み込み）
+                for row_idx, row in enumerate(rows_data[1:], start=0):
+                    if not row or row[0] is None or row[0] == '':
+                        break
+                    
+                    task_data = {}
+                    for col_idx, col_name in enumerate(EXCEL_COLUMNS):
+                        if col_idx < len(row):
+                            task_data[col_name] = str(row[col_idx]) if row[col_idx] else ""
+                        else:
+                            task_data[col_name] = ""
+                    
+                    self.all_task_data.append(task_data)
+                    self.original_task_data.append(task_data.copy())
+                    
+                    profile = task_data["Profile"]
+                    site = task_data["Site"]
+                    mode = task_data["Mode"]
+                    url = task_data["URL"]
+                    proxy = task_data["Proxy"]
+                    
+                    self.add_task_row(profile, site, mode, url, proxy)
+                    task_count += 1
+                
             else:
-                ws = wb.active
-                # セレクターの選択を同期（blockSignalsで無限ループ防止）
-                if ws.title in sheet_names:
+                # Excel読み込み
+                wb = openpyxl.load_workbook(file_path)
+                
+                # シート名リストを取得
+                sheet_names = wb.sheetnames
+                
+                # シートセレクターを有効化・更新（シート名指定がない場合のみ）
+                self.sheet_selector.setEnabled(True)
+                if sheet_name is None:
+                    self.current_sheet_names = sheet_names
                     self.sheet_selector.blockSignals(True)
-                    self.sheet_selector.setCurrentText(ws.title)
+                    self.sheet_selector.clear()
+                    self.sheet_selector.addItems(sheet_names)
                     self.sheet_selector.blockSignals(False)
-            
-            self.task_table.setRowCount(0)
-            self.workers.clear()
-            self.all_task_data = []
-            self.original_task_data = []
-            self.last_checked_row = None
-            
-            # カウンターをリセット
-            self.idle_count = 0
-            self.success_count = 0
-            self.failed_count = 0
-            
-            task_count = 0
-            
-            for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=0):
-                if row[0] is None:
-                    break
                 
-                task_data = {}
-                for col_idx, col_name in enumerate(EXCEL_COLUMNS):
-                    if col_idx < len(row):
-                        task_data[col_name] = str(row[col_idx]) if row[col_idx] else ""
-                    else:
-                        task_data[col_name] = ""
+                # 指定されたシート、またはアクティブシートを選択
+                if sheet_name and sheet_name in sheet_names:
+                    ws = wb[sheet_name]
+                else:
+                    ws = wb.active
+                    # セレクターの選択を同期（blockSignalsで無限ループ防止）
+                    if ws.title in sheet_names:
+                        self.sheet_selector.blockSignals(True)
+                        self.sheet_selector.setCurrentText(ws.title)
+                        self.sheet_selector.blockSignals(False)
                 
-                self.all_task_data.append(task_data)
-                self.original_task_data.append(task_data.copy())
+                self.task_table.setRowCount(0)
+                self.workers.clear()
+                self.all_task_data = []
+                self.original_task_data = []
+                self.last_checked_row = None
                 
-                profile = task_data["Profile"]
-                site = task_data["Site"]
-                mode = task_data["Mode"]
-                url = task_data["URL"]
-                proxy = task_data["Proxy"]
+                # カウンターをリセット
+                self.idle_count = 0
+                self.success_count = 0
+                self.failed_count = 0
                 
-                self.add_task_row(profile, site, mode, url, proxy)
-                task_count += 1
+                task_count = 0
+                
+                for row_idx, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=0):
+                    if row[0] is None:
+                        break
+                    
+                    task_data = {}
+                    for col_idx, col_name in enumerate(EXCEL_COLUMNS):
+                        if col_idx < len(row):
+                            task_data[col_name] = str(row[col_idx]) if row[col_idx] else ""
+                        else:
+                            task_data[col_name] = ""
+                    
+                    self.all_task_data.append(task_data)
+                    self.original_task_data.append(task_data.copy())
+                    
+                    profile = task_data["Profile"]
+                    site = task_data["Site"]
+                    mode = task_data["Mode"]
+                    url = task_data["URL"]
+                    proxy = task_data["Proxy"]
+                    
+                    self.add_task_row(profile, site, mode, url, proxy)
+                    task_count += 1
+                
+                wb.close()
             
             self.header_label.setText(f"Tasks({task_count})")
             self.current_excel_path = file_path
@@ -1692,8 +1764,6 @@ class TaskPage(QWidget):
             self.idle_label.setText(f"Idle Task: {self.idle_count}")
             self.success_label.setText(f"Success Task: {self.success_count}")
             self.failed_label.setText(f"Failed Task: {self.failed_count}")
-            
-            wb.close()
             
             # トースト通知
             if show_toast:
