@@ -5066,7 +5066,9 @@ class UpdateDialog(QDialog):
         layout.setSpacing(14)
         
         # タイトル
-        title = QLabel(f"🔄 アップデート v{self.latest_version}")
+        # vプレフィックスを除去して表示
+        display_version = self.latest_version.lstrip('v')
+        title = QLabel(f"🔄 アップデート v{display_version}")
         title.setStyleSheet("font-size: 17px; font-weight: bold; color: #ffffff; background: transparent;")
         layout.addWidget(title)
         
