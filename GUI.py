@@ -128,6 +128,9 @@ def download_bot_code(site: str, mode: str) -> str:
     
     # 2. ローカルの.pyファイルをチェック（_internal/bots/site/site_mode.py）
     local_bot_path = APP_DIR / "_internal" / "bots" / site / f"{site}_{mode}.py"
+    print(f"[DEBUG] Looking for local bot: {local_bot_path}")
+    print(f"[DEBUG] APP_DIR: {APP_DIR}")
+    print(f"[DEBUG] File exists: {local_bot_path.exists()}")
     if local_bot_path.exists():
         try:
             with open(local_bot_path, 'r', encoding='utf-8') as f:
@@ -867,8 +870,14 @@ class BotWorker(QThread):
                 if len(result) >= 3:
                     success, results, error_status = result
                 elif len(result) == 2:
-                    success, results = result
-                    error_status = None
+                    success, second = result
+                    # 2番目の要素が文字列ならerror_status、それ以外ならresults
+                    if isinstance(second, str):
+                        error_status = second if not success else None
+                        results = None
+                    else:
+                        results = second
+                        error_status = None
                 else:
                     success = result[0] if result else False
                     results = []
@@ -1617,7 +1626,7 @@ class TaskPage(QWidget):
             "Loginid", "Loginpass", "LastName", "FirstName",
             "LastNameKana", "FirstNameKana", "Country", "State",
             "City", "Address1", "Address2", "Zipcode", "Tell",
-            "Birthday", "Size", "Gender", "Cardfirstname", "Cardlastname",
+            "Mail", "Birthday", "Size", "Gender", "Cardfirstname", "Cardlastname",
             "Cardnumber", "Cardmonth", "Cardyear", "Securitycode",
             "Free1", "Free2"
         ]
@@ -1956,10 +1965,11 @@ class TaskPage(QWidget):
             return
         
         # サポートされているサイトとモードをチェック
-        supported_sites = ["amazon", "icloud"]
+        supported_sites = ["amazon", "icloud", "x"]
         supported_modes = {
             "amazon": ["browser", "signup", "addy", "card", "raffle"],
-            "icloud": ["generate", "collect"]
+            "icloud": ["generate", "collect"],
+            "x": ["repost", "browser"]
         }
         
         if site not in supported_sites:
@@ -2347,11 +2357,17 @@ class TaskPage(QWidget):
                         "Fetching Emails", "Generating Email", "Waiting Cooldown"
                     ] or status.startswith("Generating ") or status.startswith("Waiting "):
                         color = "#3498db"  # iCloud用進捗ステータス（青）
+                    elif status in [
+                        # X Repost/Browser用進捗ステータス（青）
+                        "Opening Page", "Following", "Liking", "Reposting", "Verifying",
+                        "Browsing", "Solving Cloudflare", "Solving CF Challenge", "OTP Required"
+                    ]:
+                        color = "#3498db"  # X用進捗ステータス（青）
                     elif status == "Success":
                         color = "#2ecc71"
                         # 成功したらチェックボックスを外す
                         self._uncheck_row(row)
-                    elif status in ["Failed", "Stopped", "Not supported", "Already Raffled", "Not Find", "Timeout"]:
+                    elif status in ["Failed", "Stopped", "Not supported", "Already Raffled", "Not Find", "Timeout", "Already Reposted"]:
                         color = "#e74c3c"
                     elif status.startswith("Raffled("):
                         color = "#e74c3c"
@@ -2456,7 +2472,10 @@ class TaskPage(QWidget):
                 # iCloud用 - Collect/Generate
                 "Clicking Sign In", "Clicking Continue", "Checking 2FA", "Waiting 2FA",
                 "Login Success", "Login Failed", "Collecting Emails", "Navigating to HME",
-                "Fetching Emails", "Generating Email", "Waiting Cooldown"
+                "Fetching Emails", "Generating Email", "Waiting Cooldown",
+                # X Repost/Browser用
+                "Opening Page", "Following", "Liking", "Reposting", "Verifying",
+                "Solving Cloudflare", "Solving CF Challenge", "OTP Required",
             ]
             is_progress = result in progress_statuses or result.startswith("Raffle ") or result.startswith("CAPTCHA ") or result.startswith("Generating ") or result.startswith("Waiting ")
             
@@ -2469,8 +2488,8 @@ class TaskPage(QWidget):
                 self.update_status(row, result if result.startswith("Failed") else "Failed")
             elif result == "Stopped":
                 self.update_status(row, "Stopped")  # Stoppedは赤文字
-            elif result in ["Already Raffled", "Not Find"]:
-                # Raffleモードのカスタムステータス
+            elif result in ["Already Raffled", "Not Find", "Already Reposted"]:
+                # カスタムステータス（赤文字）
                 self.update_status(row, result)
             elif result.startswith("Raffled("):
                 # 部分的にRaffled
@@ -2525,14 +2544,24 @@ class TaskPage(QWidget):
             if not mode:
                 return
             
-            # Signup, Addy, Card, Collect, Generate のみWebhook送信（RaffleはRAFFLE_RESULTS経由で送信）
-            if mode not in ["Signup", "Addy", "Card", "Collect", "Generate"]:
-                return
-            
             # 他の情報を取得（ヘルパー関数使用）
             profile = self._get_cell_text(row, 1)
             site = self._get_cell_text(row, 2)
             proxy = self._get_cell_text(row, 5)
+            
+            # Site + Mode の組み合わせでWebhook送信対象を判定
+            # RaffleはRAFFLE_RESULTS経由で送信するため除外
+            webhook_targets = [
+                ("Amazon", "Signup"),
+                ("Amazon", "Addy"),
+                ("Amazon", "Card"),
+                ("iCloud", "Collect"),
+                ("iCloud", "Generate"),
+                ("X", "Repost"),
+            ]
+            
+            if (site, mode) not in webhook_targets:
+                return
             
             # Loginidはall_task_dataから取得
             loginid = ""
