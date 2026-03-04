@@ -2308,7 +2308,11 @@ class TaskPage(QWidget):
                     
                     # 色を設定
                     color = "#b0b0b0"  # デフォルト
-                    if status == "Idle":
+                    
+                    # Failedで始まるステータスは最優先で赤色
+                    if status.startswith("Failed") or status in ["Login Failed", "Repost Failed", "Browse Failed", "Tweet Not Found", "Browser Closed"]:
+                        color = "#e74c3c"
+                    elif status == "Idle":
                         color = "#b0b0b0"
                     elif status == "Queued":
                         color = "#f39c12"
