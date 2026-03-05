@@ -1969,7 +1969,7 @@ class TaskPage(QWidget):
         supported_modes = {
             "amazon": ["browser", "signup", "addy", "card", "raffle"],
             "icloud": ["generate", "collect"],
-            "x": ["repost", "browser"]
+            "x": ["repost", "browser", "password", "follow", "name", "bio", "icon", "header"]
         }
         
         if site not in supported_sites:
@@ -2310,7 +2310,7 @@ class TaskPage(QWidget):
                     color = "#b0b0b0"  # デフォルト
                     
                     # Failedで始まるステータスは最優先で赤色
-                    if status.startswith("Failed") or status in ["Login Failed", "Repost Failed", "Browse Failed", "Tweet Not Found", "Browser Closed"]:
+                    if status.startswith("Failed") or status in ["Login Failed", "Repost Failed", "Browse Failed", "Tweet Not Found", "Browser Closed", "Password Change Failed", "No New Password", "Follow Failed", "Already Followed", "Name Change Failed", "No New Name", "Bio Change Failed", "No New Bio", "Icon Change Failed", "No Icon File", "Icon Not Found", "Header Change Failed", "No Header File", "Header Not Found"]:
                         color = "#e74c3c"
                     elif status == "Idle":
                         color = "#b0b0b0"
@@ -2362,9 +2362,12 @@ class TaskPage(QWidget):
                     ] or status.startswith("Generating ") or status.startswith("Waiting "):
                         color = "#3498db"  # iCloud用進捗ステータス（青）
                     elif status in [
-                        # X Repost/Browser用進捗ステータス（青）
+                        # X Repost/Browser/Password/Follow/Name/Bio/Icon/Header用進捗ステータス（青）
                         "Opening Page", "Following", "Liking", "Reposting", "Verifying",
-                        "Browsing", "Solving Cloudflare", "Solving CF Challenge", "OTP Required"
+                        "Browsing", "Solving Cloudflare", "Solving CF Challenge", "OTP Required",
+                        "Entering Current Password", "Entering New Password", "Confirming Password", "Saving Password",
+                        "Checking Follow Status", "Opening Edit Profile", "Entering New Name", "Saving", "Entering New Bio",
+                        "Uploading Icon", "Applying Icon", "Uploading Header", "Applying Header"
                     ]:
                         color = "#3498db"  # X用進捗ステータス（青）
                     elif status == "Success":
@@ -2477,9 +2480,12 @@ class TaskPage(QWidget):
                 "Clicking Sign In", "Clicking Continue", "Checking 2FA", "Waiting 2FA",
                 "Login Success", "Login Failed", "Collecting Emails", "Navigating to HME",
                 "Fetching Emails", "Generating Email", "Waiting Cooldown",
-                # X Repost/Browser用
+                # X Repost/Browser/Password/Follow/Name/Bio/Icon/Header用
                 "Opening Page", "Following", "Liking", "Reposting", "Verifying",
                 "Solving Cloudflare", "Solving CF Challenge", "OTP Required",
+                "Entering Current Password", "Entering New Password", "Confirming Password", "Saving Password",
+                "Checking Follow Status", "Opening Edit Profile", "Entering New Name", "Saving", "Entering New Bio",
+                "Uploading Icon", "Applying Icon", "Uploading Header", "Applying Header",
             ]
             is_progress = result in progress_statuses or result.startswith("Raffle ") or result.startswith("CAPTCHA ") or result.startswith("Generating ") or result.startswith("Waiting ")
             
@@ -2492,7 +2498,7 @@ class TaskPage(QWidget):
                 self.update_status(row, result if result.startswith("Failed") else "Failed")
             elif result == "Stopped":
                 self.update_status(row, "Stopped")  # Stoppedは赤文字
-            elif result in ["Already Raffled", "Not Find", "Already Reposted"]:
+            elif result in ["Already Raffled", "Not Find", "Already Reposted", "Already Followed", "Icon Not Found", "No Icon File", "Icon Change Failed", "Name Change Failed", "No New Name", "Bio Change Failed", "No New Bio", "Password Change Failed", "No New Password", "Header Not Found", "No Header File", "Header Change Failed"]:
                 # カスタムステータス（赤文字）
                 self.update_status(row, result)
             elif result.startswith("Raffled("):
@@ -2562,6 +2568,12 @@ class TaskPage(QWidget):
                 ("iCloud", "Collect"),
                 ("iCloud", "Generate"),
                 ("X", "Repost"),
+                ("X", "Password"),
+                ("X", "Follow"),
+                ("X", "Name"),
+                ("X", "Bio"),
+                ("X", "Icon"),
+                ("X", "Header"),
             ]
             
             if (site, mode) not in webhook_targets:
