@@ -1970,7 +1970,7 @@ class TaskPage(QWidget):
             "amazon": ["browser", "signup", "addy", "card", "raffle"],
             "icloud": ["generate", "collect"],
             "x": ["repost", "browser", "password", "follow", "name", "bio", "icon", "header"],
-            "rakuten": ["browser", "address", "card"]
+            "rakuten": ["browser", "address", "card", "name"]
         }
         
         if site not in supported_sites:
@@ -2311,7 +2311,7 @@ class TaskPage(QWidget):
                     color = "#b0b0b0"  # デフォルト
                     
                     # Failedで始まるステータスは最優先で赤色
-                    if status.startswith("Failed") or status in ["Login Failed", "Repost Failed", "Browse Failed", "Tweet Not Found", "Browser Closed", "Password Change Failed", "No New Password", "Follow Failed", "Already Followed", "Name Change Failed", "No New Name", "Bio Change Failed", "No New Bio", "Icon Change Failed", "No Icon File", "Icon Not Found", "Header Change Failed", "No Header File", "Header Not Found", "Address Change Failed", "No Zipcode", "No Tell", "Card Registration Failed", "No Card Number", "No Card Expiry"]:
+                    if status.startswith("Failed") or status in ["Login Failed", "Repost Failed", "Browse Failed", "Tweet Not Found", "Browser Closed", "Password Change Failed", "No New Password", "Follow Failed", "Already Followed", "Name Change Failed", "No New Name", "Bio Change Failed", "No New Bio", "Icon Change Failed", "No Icon File", "Icon Not Found", "Header Change Failed", "No Header File", "Header Not Found", "Address Change Failed", "No Zipcode", "No Tell", "Card Registration Failed", "No Card Number", "No Card Expiry", "No Name"]:
                         color = "#e74c3c"
                     elif status == "Idle":
                         color = "#b0b0b0"
@@ -2375,7 +2375,8 @@ class TaskPage(QWidget):
                         "Entering Zipcode", "Entering Address", "Entering Tell",
                         "Opening Payment Page", "Checking Existing Card", "Adding New Card", "Entering Card Info",
                         "Entering Card Number", "Entering Expiry Month", "Entering Expiry Year", "Submitting Card",
-                        "Re-entering Password"
+                        "Re-entering Password",
+                        "Opening Personal Info", "Entering LastName", "Entering FirstName", "Entering LastNameKana", "Entering FirstNameKana"
                     ]:
                         color = "#3498db"  # X用進捗ステータス（青）
                     elif status == "Success":
@@ -2501,6 +2502,7 @@ class TaskPage(QWidget):
                 "Opening Payment Page", "Checking Existing Card", "Adding New Card", "Entering Card Info",
                 "Entering Card Number", "Entering Expiry Month", "Entering Expiry Year", "Submitting Card",
                 "Re-entering Password",
+                "Opening Personal Info", "Entering LastName", "Entering FirstName", "Entering LastNameKana", "Entering FirstNameKana",
             ]
             is_progress = result in progress_statuses or result.startswith("Raffle ") or result.startswith("CAPTCHA ") or result.startswith("Generating ") or result.startswith("Waiting ")
             
@@ -2513,7 +2515,7 @@ class TaskPage(QWidget):
                 self.update_status(row, result if result.startswith("Failed") else "Failed")
             elif result == "Stopped":
                 self.update_status(row, "Stopped")  # Stoppedは赤文字
-            elif result in ["Already Raffled", "Not Find", "Already Reposted", "Already Followed", "Icon Not Found", "No Icon File", "Icon Change Failed", "Name Change Failed", "No New Name", "Bio Change Failed", "No New Bio", "Password Change Failed", "No New Password", "Header Not Found", "No Header File", "Header Change Failed", "Address Change Failed", "No Zipcode", "No Tell", "Card Registration Failed", "No Card Number", "No Card Expiry"]:
+            elif result in ["Already Raffled", "Not Find", "Already Reposted", "Already Followed", "Icon Not Found", "No Icon File", "Icon Change Failed", "Name Change Failed", "No New Name", "Bio Change Failed", "No New Bio", "Password Change Failed", "No New Password", "Header Not Found", "No Header File", "Header Change Failed", "Address Change Failed", "No Zipcode", "No Tell", "Card Registration Failed", "No Card Number", "No Card Expiry", "No Name"]:
                 # カスタムステータス（赤文字）
                 self.update_status(row, result)
             elif result.startswith("Raffled("):
@@ -2591,6 +2593,7 @@ class TaskPage(QWidget):
                 ("X", "Header"),
                 ("Rakuten", "Address"),
                 ("Rakuten", "Card"),
+                ("Rakuten", "Name"),
             ]
             
             if (site, mode) not in webhook_targets:
