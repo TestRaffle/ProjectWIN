@@ -1969,7 +1969,7 @@ class TaskPage(QWidget):
         supported_modes = {
             "amazon": ["browser", "signup", "addy", "card", "raffle"],
             "icloud": ["generate", "collect"],
-            "x": ["repost", "browser", "password", "follow", "name", "bio", "icon", "header"],
+            "x": ["repost", "browser", "password", "follow", "name", "bio", "icon", "header", "mail"],
             "rakuten": ["browser", "address", "card", "name"]
         }
         
@@ -2363,12 +2363,16 @@ class TaskPage(QWidget):
                     ] or status.startswith("Generating ") or status.startswith("Waiting "):
                         color = "#3498db"  # iCloud用進捗ステータス（青）
                     elif status in [
-                        # X Repost/Browser/Password/Follow/Name/Bio/Icon/Header用進捗ステータス（青）
+                        # X Repost/Browser/Password/Follow/Name/Bio/Icon/Header/Mail用進捗ステータス（青）
                         "Opening Page", "Following", "Liking", "Reposting", "Verifying",
                         "Browsing", "Solving Cloudflare", "Solving CF Challenge", "OTP Required",
                         "Entering Current Password", "Entering New Password", "Confirming Password", "Saving Password",
                         "Checking Follow Status", "Opening Edit Profile", "Entering New Name", "Saving", "Entering New Bio",
                         "Uploading Icon", "Applying Icon", "Uploading Header", "Applying Header",
+                        # X Mail用進捗ステータス（青）
+                        "Opening Account Page", "Entering Password", "Clicking Confirm", "Clicking Email Link",
+                        "Clicking Update Email", "Checking Restrictions", "Entering New Email", "Clicking Next",
+                        "Fetching Email OTP", "Entering OTP", "Clicking Verify", "Verifying Change",
                         # Rakuten用進捗ステータス（青）
                         "Clicking Login", "Entering Email", "Clicking Next", "Entering Password", "Submitting Login", "Verifying Login",
                         "Opening My Rakuten", "Opening Member Info", "Opening Address Page", "Clicking Edit",
@@ -2376,14 +2380,25 @@ class TaskPage(QWidget):
                         "Opening Payment Page", "Checking Existing Card", "Adding New Card", "Entering Card Info",
                         "Entering Card Number", "Entering Expiry Month", "Entering Expiry Year", "Submitting Card",
                         "Re-entering Password",
-                        "Opening Personal Info", "Entering LastName", "Entering FirstName", "Entering LastNameKana", "Entering FirstNameKana"
+                        "Opening Personal Info", "Entering LastName", "Entering FirstName", "Entering LastNameKana", "Entering FirstNameKana",
+                        # Google用進捗ステータス（青）
+                        "Clicking Login", "Entering Email", "Clicking Next", "Checking CAPTCHA", "Waiting CAPTCHA",
+                        "Entering Password", "Checking Recovery Email", "Entering Recovery Email",
+                        "Checking Phone Verification", "Getting Phone Number", "Entering Phone",
+                        "Waiting SMS Code", "Entering SMS Code", "Skipping Prompts"
                     ]:
                         color = "#3498db"  # X用進捗ステータス（青）
                     elif status == "Success":
                         color = "#2ecc71"
                         # 成功したらチェックボックスを外す
                         self._uncheck_row(row)
-                    elif status in ["Failed", "Stopped", "Not supported", "Already Raffled", "Not Find", "Timeout", "Already Reposted"]:
+                    elif status in [
+                        "Failed", "Stopped", "Not supported", "Already Raffled", "Not Find", "Timeout", "Already Reposted",
+                        # X Mail用エラーステータス（赤）
+                        "No New Email", "Restricted 48h", "OTP Failed", "Email Change Failed",
+                        # Google用エラーステータス（赤）
+                        "SMS Failed"
+                    ]:
                         color = "#e74c3c"
                     elif status.startswith("Raffled("):
                         color = "#e74c3c"
@@ -2489,12 +2504,16 @@ class TaskPage(QWidget):
                 "Clicking Sign In", "Clicking Continue", "Checking 2FA", "Waiting 2FA",
                 "Login Success", "Login Failed", "Collecting Emails", "Navigating to HME",
                 "Fetching Emails", "Generating Email", "Waiting Cooldown",
-                # X Repost/Browser/Password/Follow/Name/Bio/Icon/Header用
+                # X Repost/Browser/Password/Follow/Name/Bio/Icon/Header/Mail用
                 "Opening Page", "Following", "Liking", "Reposting", "Verifying",
                 "Solving Cloudflare", "Solving CF Challenge", "OTP Required",
                 "Entering Current Password", "Entering New Password", "Confirming Password", "Saving Password",
                 "Checking Follow Status", "Opening Edit Profile", "Entering New Name", "Saving", "Entering New Bio",
                 "Uploading Icon", "Applying Icon", "Uploading Header", "Applying Header",
+                # X Mail用
+                "Opening Account Page", "Entering Password", "Clicking Confirm", "Clicking Email Link",
+                "Clicking Update Email", "Checking Restrictions", "Entering New Email", "Clicking Next",
+                "Fetching Email OTP", "Entering OTP", "Clicking Verify", "Verifying Change",
                 # Rakuten用
                 "Clicking Login", "Entering Email", "Clicking Next", "Entering Password", "Submitting Login", "Verifying Login",
                 "Opening My Rakuten", "Opening Member Info", "Opening Address Page", "Clicking Edit",
@@ -2503,6 +2522,11 @@ class TaskPage(QWidget):
                 "Entering Card Number", "Entering Expiry Month", "Entering Expiry Year", "Submitting Card",
                 "Re-entering Password",
                 "Opening Personal Info", "Entering LastName", "Entering FirstName", "Entering LastNameKana", "Entering FirstNameKana",
+                # Google用
+                "Clicking Login", "Entering Email", "Clicking Next", "Checking CAPTCHA", "Waiting CAPTCHA",
+                "Entering Password", "Checking Recovery Email", "Entering Recovery Email",
+                "Checking Phone Verification", "Getting Phone Number", "Entering Phone",
+                "Waiting SMS Code", "Entering SMS Code", "Skipping Prompts",
             ]
             is_progress = result in progress_statuses or result.startswith("Raffle ") or result.startswith("CAPTCHA ") or result.startswith("Generating ") or result.startswith("Waiting ")
             
@@ -2515,7 +2539,7 @@ class TaskPage(QWidget):
                 self.update_status(row, result if result.startswith("Failed") else "Failed")
             elif result == "Stopped":
                 self.update_status(row, "Stopped")  # Stoppedは赤文字
-            elif result in ["Already Raffled", "Not Find", "Already Reposted", "Already Followed", "Icon Not Found", "No Icon File", "Icon Change Failed", "Name Change Failed", "No New Name", "Bio Change Failed", "No New Bio", "Password Change Failed", "No New Password", "Header Not Found", "No Header File", "Header Change Failed", "Address Change Failed", "No Zipcode", "No Tell", "Card Registration Failed", "No Card Number", "No Card Expiry", "No Name"]:
+            elif result in ["Already Raffled", "Not Find", "Already Reposted", "Already Followed", "Icon Not Found", "No Icon File", "Icon Change Failed", "Name Change Failed", "No New Name", "Bio Change Failed", "No New Bio", "Password Change Failed", "No New Password", "Header Not Found", "No Header File", "Header Change Failed", "Address Change Failed", "No Zipcode", "No Tell", "Card Registration Failed", "No Card Number", "No Card Expiry", "No Name", "No New Email", "Restricted 48h", "OTP Failed", "Email Change Failed", "SMS Failed"]:
                 # カスタムステータス（赤文字）
                 self.update_status(row, result)
             elif result.startswith("Raffled("):
@@ -2591,6 +2615,7 @@ class TaskPage(QWidget):
                 ("X", "Bio"),
                 ("X", "Icon"),
                 ("X", "Header"),
+                ("X", "Mail"),
                 ("Rakuten", "Address"),
                 ("Rakuten", "Card"),
                 ("Rakuten", "Name"),
