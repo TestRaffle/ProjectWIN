@@ -5580,7 +5580,9 @@ class MainWindow(QMainWindow):
     def _set_window_icon(self):
         """ウィンドウアイコン（タスクバー用）を設定"""
         try:
-            # Logo.icoのパスを取得
+            from PySide6.QtGui import QPixmap
+            
+            # Logo.pngまたはLogo.icoのパスを取得
             if getattr(sys, 'frozen', False):
                 # exe実行時
                 base_path = Path(sys.executable).parent
@@ -5588,14 +5590,28 @@ class MainWindow(QMainWindow):
                 # 開発時
                 base_path = Path(__file__).parent
             
-            icon_path = base_path / "Logo.ico"
-            if icon_path.exists():
-                self.setWindowIcon(QIcon(str(icon_path)))
-            else:
-                # _internal内も確認
-                icon_path_internal = base_path / "_internal" / "Logo.ico"
-                if icon_path_internal.exists():
-                    self.setWindowIcon(QIcon(str(icon_path_internal)))
+            # PNGを優先（PySide6での互換性が高い）
+            icon_set = False
+            for icon_name in ["Logo.png", "Logo.ico"]:
+                icon_path = base_path / icon_name
+                if icon_path.exists():
+                    pixmap = QPixmap(str(icon_path))
+                    if not pixmap.isNull():
+                        self.setWindowIcon(QIcon(pixmap))
+                        icon_set = True
+                        break
+            
+            # 見つからない場合は_internal内も確認
+            if not icon_set:
+                for icon_name in ["Logo.png", "Logo.ico"]:
+                    icon_path = base_path / "_internal" / icon_name
+                    if icon_path.exists():
+                        pixmap = QPixmap(str(icon_path))
+                        if not pixmap.isNull():
+                            self.setWindowIcon(QIcon(pixmap))
+                            break
+        except Exception as e:
+            print(f"Failed to set window icon: {e}")
         except Exception as e:
             print(f"Failed to set window icon: {e}")
     
