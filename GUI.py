@@ -5553,8 +5553,34 @@ class MainWindow(QMainWindow):
         self._drag_pos = None
         self._resizing = False
         self._resize_direction = None
+        
+        # タスクバー用アイコンを設定
+        self._set_window_icon()
+        
         self.setup_ui()
         self.apply_dark_theme()
+    
+    def _set_window_icon(self):
+        """ウィンドウアイコン（タスクバー用）を設定"""
+        try:
+            # Logo.icoのパスを取得
+            if getattr(sys, 'frozen', False):
+                # exe実行時
+                base_path = Path(sys.executable).parent
+            else:
+                # 開発時
+                base_path = Path(__file__).parent
+            
+            icon_path = base_path / "Logo.ico"
+            if icon_path.exists():
+                self.setWindowIcon(QIcon(str(icon_path)))
+            else:
+                # _internal内も確認
+                icon_path_internal = base_path / "_internal" / "Logo.ico"
+                if icon_path_internal.exists():
+                    self.setWindowIcon(QIcon(str(icon_path_internal)))
+        except Exception as e:
+            print(f"Failed to set window icon: {e}")
     
     def mousePressEvent(self, event):
         """ドラッグ/リサイズ開始位置を記録"""
