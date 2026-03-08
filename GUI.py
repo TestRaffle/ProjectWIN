@@ -657,7 +657,7 @@ class SidebarButton(QPushButton):
     
     def _get_style(self, expanded=True):
         alignment = "left" if expanded else "center"
-        padding = "12px 15px" if expanded else "12px 5px"
+        padding = "12px 15px 12px 8px" if expanded else "12px 5px"
         return f"""
             QPushButton {{
                 background-color: transparent;
@@ -5689,31 +5689,60 @@ class MainWindow(QMainWindow):
                 border-bottom-left-radius: 10px;
             }
         """)
-        self.sidebar_width_expanded = 150
-        self.sidebar_width_collapsed = 70
+        self.sidebar_width_expanded = 130
+        self.sidebar_width_collapsed = 80
         self.sidebar_container.setFixedWidth(self.sidebar_width_expanded)
         
         sidebar_layout = QVBoxLayout(self.sidebar_container)
-        sidebar_layout.setContentsMargins(12, 20, 0, 20)
-        sidebar_layout.setSpacing(8)
+        sidebar_layout.setContentsMargins(12, 15, 0, 20)
+        sidebar_layout.setSpacing(0)
         
-        # ヘッダー（タイトル + 折りたたみボタン）
-        header_layout = QHBoxLayout()
-        header_layout.setContentsMargins(0, 0, 0, 15)
+        # ロゴ
+        self.logo_icon = QLabel()
+        logo_icon_base64 = "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"
+        logo_pixmap = QPixmap()
+        logo_pixmap.loadFromData(base64.b64decode(logo_icon_base64))
+        logo_pixmap = logo_pixmap.scaled(72, 72, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        self.logo_icon.setPixmap(logo_pixmap)
+        self.logo_icon.setFixedSize(72, 72)
+        self.logo_icon.setStyleSheet("margin-left: -10px;")
+        sidebar_layout.addWidget(self.logo_icon)
         
-        # ロゴ/タイトル
-        self.title_label = QLabel("Project\nWIN")
+        # タイトル（ロゴのすぐ下、間隔を狭く）
+        self.title_label = QLabel("Project WIN")
         self.title_label.setStyleSheet("""
-            font-size: 18px;
+            font-size: 11px;
             font-weight: bold;
             color: #ffffff;
-            padding: 10px 5px;
-            margin-right: 12px;
+            padding: 0px;
+            margin-top: 0px;
+            margin-bottom: 15px;
         """)
-        header_layout.addWidget(self.title_label)
-        header_layout.addStretch()
+        sidebar_layout.addWidget(self.title_label)
         
-        # 折りたたみボタン（境界線と一体化）
+        # ナビゲーションボタン（Base64アイコン使用）
+        self.nav_buttons = []
+        
+        self.task_btn = SidebarButton("Task", "task")
+        self.task_btn.setChecked(True)
+        self.task_btn.clicked.connect(lambda: self.switch_page(0))
+        sidebar_layout.addWidget(self.task_btn)
+        self.nav_buttons.append(self.task_btn)
+        
+        self.setting_btn = SidebarButton("Setting", "settings")
+        self.setting_btn.clicked.connect(lambda: self.switch_page(1))
+        sidebar_layout.addWidget(self.setting_btn)
+        self.nav_buttons.append(self.setting_btn)
+        
+        self.proxy_btn = SidebarButton("Proxy", "web")
+        self.proxy_btn.clicked.connect(lambda: self.switch_page(2))
+        sidebar_layout.addWidget(self.proxy_btn)
+        self.nav_buttons.append(self.proxy_btn)
+        
+        # スペーサー（ボタンと折りたたみボタンの間隔）
+        sidebar_layout.addSpacing(80)
+        
+        # 折りたたみボタン
         self.toggle_btn = QPushButton("◀")
         self.toggle_btn.setFixedSize(24, 48)
         self.toggle_btn.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -5735,29 +5764,9 @@ class MainWindow(QMainWindow):
             }
         """)
         self.toggle_btn.clicked.connect(self.toggle_sidebar)
-        header_layout.addWidget(self.toggle_btn)
+        sidebar_layout.addWidget(self.toggle_btn, alignment=Qt.AlignmentFlag.AlignRight)
         
-        sidebar_layout.addLayout(header_layout)
-        
-        # ナビゲーションボタン（Base64アイコン使用）
-        self.nav_buttons = []
-        
-        self.task_btn = SidebarButton("Task", "task")
-        self.task_btn.setChecked(True)
-        self.task_btn.clicked.connect(lambda: self.switch_page(0))
-        sidebar_layout.addWidget(self.task_btn)
-        self.nav_buttons.append(self.task_btn)
-        
-        self.setting_btn = SidebarButton("Setting", "settings")
-        self.setting_btn.clicked.connect(lambda: self.switch_page(1))
-        sidebar_layout.addWidget(self.setting_btn)
-        self.nav_buttons.append(self.setting_btn)
-        
-        self.proxy_btn = SidebarButton("Proxy", "web")
-        self.proxy_btn.clicked.connect(lambda: self.switch_page(2))
-        sidebar_layout.addWidget(self.proxy_btn)
-        self.nav_buttons.append(self.proxy_btn)
-        
+        # バージョン情報を下に押し下げるstretch
         sidebar_layout.addStretch()
         
         # バージョン情報（動的に読み取り）
@@ -5889,15 +5898,17 @@ class MainWindow(QMainWindow):
             # 展開
             self.sidebar_container.setFixedWidth(self.sidebar_width_expanded)
             self.toggle_btn.setText("◀")
-            self.title_label.setText("Project\nWIN")
             self.title_label.show()
             self.version_label.show()
+            self.logo_icon.setStyleSheet("margin-left: -10px;")
         else:
-            # 折りたたみ
+            # 折りたたみ（アイコンは表示、タイトルは非表示）
             self.sidebar_container.setFixedWidth(self.sidebar_width_collapsed)
             self.toggle_btn.setText("▶")
             self.title_label.hide()
             self.version_label.hide()
+            # タイトル分の高さ（約30px）を補う
+            self.logo_icon.setStyleSheet("margin-left: -10px;")
         
         # ナビゲーションボタンの表示を更新
         for btn in self.nav_buttons:
