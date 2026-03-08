@@ -6037,6 +6037,25 @@ def main():
     
     app = QApplication(sys.argv)
     
+    # アプリケーションアイコンを設定（タスクバー用）
+    try:
+        from PySide6.QtGui import QPixmap
+        if getattr(sys, 'frozen', False):
+            base_path = Path(sys.executable).parent
+        else:
+            base_path = Path(__file__).parent
+        
+        for icon_name in ["Logo.png", "Logo.ico"]:
+            icon_path = base_path / icon_name
+            if icon_path.exists():
+                pixmap = QPixmap(str(icon_path))
+                if not pixmap.isNull():
+                    app.setWindowIcon(QIcon(pixmap))
+                    print(f"[App] Icon set from {icon_name}")
+                    break
+    except Exception as e:
+        print(f"[App] Failed to set app icon: {e}")
+    
     # アプリケーションフォント設定
     font = QFont("Segoe UI", 10)
     app.setFont(font)
