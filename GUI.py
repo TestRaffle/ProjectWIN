@@ -728,10 +728,11 @@ class BotWorker(QThread):
             return
         
         # \x00STATUS:で始まる行はステータスを更新（ログには追加しない、コンソールにも表示しない）
+        # status_changedシグナルを使用（webhookなし）
         if "\x00STATUS:" in text:
             try:
                 status = text.split("\x00STATUS:")[1].strip()
-                self.result_changed.emit(self.row, status)
+                self.status_changed.emit(self.row, status)
             except:
                 pass
             return  # ログには追加しない
@@ -740,7 +741,7 @@ class BotWorker(QThread):
         if text.startswith("STATUS:"):
             try:
                 status = text.split("STATUS:")[1].strip()
-                self.result_changed.emit(self.row, status)
+                self.status_changed.emit(self.row, status)
             except:
                 pass
             return  # ログには追加しない
@@ -871,9 +872,13 @@ class BotWorker(QThread):
                     success, results, error_status = result
                 elif len(result) == 2:
                     success, second = result
-                    # 2番目の要素が文字列ならerror_status、それ以外ならresults
+                    # 2番目の要素が文字列ならerror_status（失敗時）またはsuccess_status（成功時）
                     if isinstance(second, str):
-                        error_status = second if not success else None
+                        if success:
+                            # 成功時の文字列はsuccess_statusとして扱う
+                            error_status = second  # error_statusを再利用（result_changedで使用）
+                        else:
+                            error_status = second
                         results = None
                     else:
                         results = second
@@ -1969,7 +1974,7 @@ class TaskPage(QWidget):
         supported_modes = {
             "amazon": ["browser", "signup", "addy", "card", "raffle"],
             "icloud": ["generate", "collect"],
-            "x": ["repost", "browser", "password", "follow", "name", "bio", "icon", "header", "mail"],
+            "x": ["repost", "browser", "password", "follow", "name", "bio", "icon", "header", "mail", "follower"],
             "rakuten": ["browser", "address", "card", "name"]
         }
         
@@ -2365,7 +2370,7 @@ class TaskPage(QWidget):
                     elif status in [
                         # X Repost/Browser/Password/Follow/Name/Bio/Icon/Header/Mail用進捗ステータス（青）
                         "Opening Page", "Following", "Liking", "Reposting", "Verifying",
-                        "Browsing", "Solving Cloudflare", "Solving CF Challenge", "OTP Required",
+                        "Browsing", "Solving Cloudflare", "Solving CF Challenge", "OTP Required", "Cloudflare Detected",
                         "Entering Current Password", "Entering New Password", "Confirming Password", "Saving Password",
                         "Checking Follow Status", "Opening Edit Profile", "Entering New Name", "Saving", "Entering New Bio",
                         "Uploading Icon", "Applying Icon", "Uploading Header", "Applying Header",
@@ -2373,6 +2378,8 @@ class TaskPage(QWidget):
                         "Opening Account Page", "Entering Password", "Clicking Confirm", "Clicking Email Link",
                         "Clicking Update Email", "Checking Restrictions", "Entering New Email", "Clicking Next",
                         "Fetching Email OTP", "Entering OTP", "Clicking Verify", "Verifying Change",
+                        # X Follower用進捗ステータス（青）
+                        "Starting Task", "Checking Login", "Opening Profile", "Getting Followers",
                         # Rakuten用進捗ステータス（青）
                         "Clicking Login", "Entering Email", "Clicking Next", "Entering Password", "Submitting Login", "Verifying Login",
                         "Opening My Rakuten", "Opening Member Info", "Opening Address Page", "Clicking Edit",
@@ -2388,7 +2395,7 @@ class TaskPage(QWidget):
                         "Waiting SMS Code", "Entering SMS Code", "Skipping Prompts"
                     ]:
                         color = "#3498db"  # X用進捗ステータス（青）
-                    elif status == "Success":
+                    elif status == "Success" or status.startswith("Success Follower"):
                         color = "#2ecc71"
                         # 成功したらチェックボックスを外す
                         self._uncheck_row(row)
@@ -2396,6 +2403,8 @@ class TaskPage(QWidget):
                         "Failed", "Stopped", "Not supported", "Already Raffled", "Not Find", "Timeout", "Already Reposted",
                         # X Mail用エラーステータス（赤）
                         "No New Email", "Restricted 48h", "OTP Failed", "Email Change Failed",
+                        # X Follower用エラーステータス（赤）
+                        "Followers Not Found", "Get Followers Failed", "Parse Failed",
                         # Google用エラーステータス（赤）
                         "SMS Failed"
                     ]:
@@ -2506,10 +2515,12 @@ class TaskPage(QWidget):
                 "Fetching Emails", "Generating Email", "Waiting Cooldown",
                 # X Repost/Browser/Password/Follow/Name/Bio/Icon/Header/Mail用
                 "Opening Page", "Following", "Liking", "Reposting", "Verifying",
-                "Solving Cloudflare", "Solving CF Challenge", "OTP Required",
+                "Solving Cloudflare", "Solving CF Challenge", "OTP Required", "Cloudflare Detected",
                 "Entering Current Password", "Entering New Password", "Confirming Password", "Saving Password",
                 "Checking Follow Status", "Opening Edit Profile", "Entering New Name", "Saving", "Entering New Bio",
                 "Uploading Icon", "Applying Icon", "Uploading Header", "Applying Header",
+                # X Follower用
+                "Starting Task", "Checking Login", "Opening Profile", "Getting Followers",
                 # X Mail用
                 "Opening Account Page", "Entering Password", "Clicking Confirm", "Clicking Email Link",
                 "Clicking Update Email", "Checking Restrictions", "Entering New Email", "Clicking Next",
@@ -2539,12 +2550,17 @@ class TaskPage(QWidget):
                 self.update_status(row, result if result.startswith("Failed") else "Failed")
             elif result == "Stopped":
                 self.update_status(row, "Stopped")  # Stoppedは赤文字
-            elif result in ["Already Raffled", "Not Find", "Already Reposted", "Already Followed", "Icon Not Found", "No Icon File", "Icon Change Failed", "Name Change Failed", "No New Name", "Bio Change Failed", "No New Bio", "Password Change Failed", "No New Password", "Header Not Found", "No Header File", "Header Change Failed", "Address Change Failed", "No Zipcode", "No Tell", "Card Registration Failed", "No Card Number", "No Card Expiry", "No Name", "No New Email", "Restricted 48h", "OTP Failed", "Email Change Failed", "SMS Failed"]:
+            elif result in ["Already Raffled", "Not Find", "Already Reposted", "Already Followed", "Icon Not Found", "No Icon File", "Icon Change Failed", "Name Change Failed", "No New Name", "Bio Change Failed", "No New Bio", "Password Change Failed", "No New Password", "Header Not Found", "No Header File", "Header Change Failed", "Address Change Failed", "No Zipcode", "No Tell", "Card Registration Failed", "No Card Number", "No Card Expiry", "No Name", "No New Email", "Restricted 48h", "OTP Failed", "Email Change Failed", "SMS Failed", "Followers Not Found", "Get Followers Failed", "Parse Failed"]:
                 # カスタムステータス（赤文字）
                 self.update_status(row, result)
             elif result.startswith("Raffled("):
                 # 部分的にRaffled
                 self.update_status(row, result)
+            elif result.startswith("Success Follower"):
+                # Followerモード成功 - ステータスをそのまま表示してWebhook送信
+                self.update_status(row, result)
+                if not skip_webhook:
+                    self._send_webhook_for_row(row)
             else:
                 self.update_status(row, "Success")
                 
@@ -2616,6 +2632,7 @@ class TaskPage(QWidget):
                 ("X", "Icon"),
                 ("X", "Header"),
                 ("X", "Mail"),
+                ("X", "Follower"),
                 ("Rakuten", "Address"),
                 ("Rakuten", "Card"),
                 ("Rakuten", "Name"),
