@@ -30,6 +30,7 @@ jobs:
         python -m nuitka ^
           --standalone ^
           --windows-console-mode=attach ^
+          --windows-icon-from-ico=Logo.ico ^
           --enable-plugin=pyside6 ^
           --assume-yes-for-downloads ^
           --include-module=requests ^
