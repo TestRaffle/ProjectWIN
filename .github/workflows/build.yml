@@ -51,10 +51,6 @@ jobs:
         rem exeの名前を変更
         ren release\GUI.exe ProjectWIN.exe
         
-        rem Logo.icoとLogo.pngをコピー（タスクバーアイコン用）
-        copy Logo.ico release\Logo.ico
-        copy Logo.png release\Logo.png
-        
         rem _internalフォルダを作成（botsはサーバーからDLするので不要）
         mkdir release\_internal
         mkdir release\_internal\settings

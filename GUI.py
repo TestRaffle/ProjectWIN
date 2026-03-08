@@ -5559,7 +5559,7 @@ class MainWindow(QMainWindow):
         self.setWindowTitle("Project WIN")
         self.setMinimumSize(1000, 700)
         self.resize(1200, 800)  # デフォルトサイズ
-        # タイトルバーを非表示にしてフレームレスに
+        # タイトルバーを非表示にしてフレームレスに（UpdateDialogと同じ）
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         # 角を丸くするために背景を透明に
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
@@ -5571,49 +5571,8 @@ class MainWindow(QMainWindow):
         self._resizing = False
         self._resize_direction = None
         
-        # タスクバー用アイコンを設定
-        self._set_window_icon()
-        
         self.setup_ui()
         self.apply_dark_theme()
-    
-    def _set_window_icon(self):
-        """ウィンドウアイコン（タスクバー用）を設定"""
-        try:
-            from PySide6.QtGui import QPixmap
-            
-            # Logo.pngまたはLogo.icoのパスを取得
-            if getattr(sys, 'frozen', False):
-                # exe実行時
-                base_path = Path(sys.executable).parent
-            else:
-                # 開発時
-                base_path = Path(__file__).parent
-            
-            # PNGを優先（PySide6での互換性が高い）
-            icon_set = False
-            for icon_name in ["Logo.png", "Logo.ico"]:
-                icon_path = base_path / icon_name
-                if icon_path.exists():
-                    pixmap = QPixmap(str(icon_path))
-                    if not pixmap.isNull():
-                        self.setWindowIcon(QIcon(pixmap))
-                        icon_set = True
-                        break
-            
-            # 見つからない場合は_internal内も確認
-            if not icon_set:
-                for icon_name in ["Logo.png", "Logo.ico"]:
-                    icon_path = base_path / "_internal" / icon_name
-                    if icon_path.exists():
-                        pixmap = QPixmap(str(icon_path))
-                        if not pixmap.isNull():
-                            self.setWindowIcon(QIcon(pixmap))
-                            break
-        except Exception as e:
-            print(f"Failed to set window icon: {e}")
-        except Exception as e:
-            print(f"Failed to set window icon: {e}")
     
     def mousePressEvent(self, event):
         """ドラッグ/リサイズ開始位置を記録"""
@@ -6008,23 +5967,25 @@ class MainWindow(QMainWindow):
 
 def main():
     # ===== 多重起動防止 =====
-    import ctypes
-    
-    # Mutexを作成（アプリ固有の名前）
-    mutex_name = "ProjectWIN_SingleInstance_Mutex"
-    kernel32 = ctypes.windll.kernel32
-    mutex = kernel32.CreateMutexW(None, False, mutex_name)
-    last_error = kernel32.GetLastError()
-    
-    # ERROR_ALREADY_EXISTS (183) = 既に別のインスタンスが起動中
-    if last_error == 183:
-        ctypes.windll.user32.MessageBoxW(
-            None,
-            "Project WIN is already running.\nOnly one instance is allowed.",
-            "Project WIN",
-            0x40  # MB_ICONINFORMATION
-        )
-        return
+    try:
+        import ctypes
+        # Mutexを作成（アプリ固有の名前）
+        mutex_name = "ProjectWIN_SingleInstance_Mutex"
+        kernel32 = ctypes.windll.kernel32
+        mutex = kernel32.CreateMutexW(None, False, mutex_name)
+        last_error = kernel32.GetLastError()
+        
+        # ERROR_ALREADY_EXISTS (183) = 既に別のインスタンスが起動中
+        if last_error == 183:
+            ctypes.windll.user32.MessageBoxW(
+                None,
+                "Project WIN is already running.\nOnly one instance is allowed.",
+                "Project WIN",
+                0x40  # MB_ICONINFORMATION
+            )
+            return
+    except:
+        pass  # ctypesが使えない環境ではスキップ
     
     # ===== Playwrightを事前初期化（QThread問題を回避） =====
     try:
@@ -6036,25 +5997,6 @@ def main():
         print(f"Playwright init warning: {e}")
     
     app = QApplication(sys.argv)
-    
-    # アプリケーションアイコンを設定（タスクバー用）
-    try:
-        from PySide6.QtGui import QPixmap
-        if getattr(sys, 'frozen', False):
-            base_path = Path(sys.executable).parent
-        else:
-            base_path = Path(__file__).parent
-        
-        for icon_name in ["Logo.png", "Logo.ico"]:
-            icon_path = base_path / icon_name
-            if icon_path.exists():
-                pixmap = QPixmap(str(icon_path))
-                if not pixmap.isNull():
-                    app.setWindowIcon(QIcon(pixmap))
-                    print(f"[App] Icon set from {icon_name}")
-                    break
-    except Exception as e:
-        print(f"[App] Failed to set app icon: {e}")
     
     # アプリケーションフォント設定
     font = QFont("Segoe UI", 10)
