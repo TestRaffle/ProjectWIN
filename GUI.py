@@ -1975,7 +1975,7 @@ class TaskPage(QWidget):
             "amazon": ["browser", "signup", "addy", "card", "raffle"],
             "icloud": ["generate", "collect"],
             "x": ["repost", "browser", "password", "follow", "name", "bio", "icon", "header", "mail", "follower"],
-            "rakuten": ["browser", "address", "card", "name"]
+            "rakuten": ["browser", "address", "card", "name", "raffle"]
         }
         
         if site not in supported_sites:
@@ -2388,6 +2388,8 @@ class TaskPage(QWidget):
                         "Entering Card Number", "Entering Expiry Month", "Entering Expiry Year", "Submitting Card",
                         "Re-entering Password",
                         "Opening Personal Info", "Entering LastName", "Entering FirstName", "Entering LastNameKana", "Entering FirstNameKana",
+                        # Rakuten Raffle用進捗ステータス（青）
+                        "Opening Login Page", "Clicking Entry", "Sending Webhook", "Cookies Saved",
                         # Google用進捗ステータス（青）
                         "Clicking Login", "Entering Email", "Clicking Next", "Checking CAPTCHA", "Waiting CAPTCHA",
                         "Entering Password", "Checking Recovery Email", "Entering Recovery Email",
@@ -2405,6 +2407,8 @@ class TaskPage(QWidget):
                         "No New Email", "Restricted 48h", "OTP Failed", "Email Change Failed",
                         # X Follower用エラーステータス（赤）
                         "Followers Not Found", "Get Followers Failed", "Parse Failed",
+                        # Rakuten Raffle用エラーステータス（赤）
+                        "Already Entered", "Not Found",
                         # Google用エラーステータス（赤）
                         "SMS Failed"
                     ]:
@@ -2533,6 +2537,8 @@ class TaskPage(QWidget):
                 "Entering Card Number", "Entering Expiry Month", "Entering Expiry Year", "Submitting Card",
                 "Re-entering Password",
                 "Opening Personal Info", "Entering LastName", "Entering FirstName", "Entering LastNameKana", "Entering FirstNameKana",
+                # Rakuten Raffle用
+                "Opening Login Page", "Clicking Entry", "Sending Webhook", "Cookies Saved",
                 # Google用
                 "Clicking Login", "Entering Email", "Clicking Next", "Checking CAPTCHA", "Waiting CAPTCHA",
                 "Entering Password", "Checking Recovery Email", "Entering Recovery Email",
@@ -2550,7 +2556,7 @@ class TaskPage(QWidget):
                 self.update_status(row, result if result.startswith("Failed") else "Failed")
             elif result == "Stopped":
                 self.update_status(row, "Stopped")  # Stoppedは赤文字
-            elif result in ["Already Raffled", "Not Find", "Already Reposted", "Already Followed", "Icon Not Found", "No Icon File", "Icon Change Failed", "Name Change Failed", "No New Name", "Bio Change Failed", "No New Bio", "Password Change Failed", "No New Password", "Header Not Found", "No Header File", "Header Change Failed", "Address Change Failed", "No Zipcode", "No Tell", "Card Registration Failed", "No Card Number", "No Card Expiry", "No Name", "No New Email", "Restricted 48h", "OTP Failed", "Email Change Failed", "SMS Failed", "Followers Not Found", "Get Followers Failed", "Parse Failed"]:
+            elif result in ["Already Raffled", "Not Find", "Already Reposted", "Already Followed", "Icon Not Found", "No Icon File", "Icon Change Failed", "Name Change Failed", "No New Name", "Bio Change Failed", "No New Bio", "Password Change Failed", "No New Password", "Header Not Found", "No Header File", "Header Change Failed", "Address Change Failed", "No Zipcode", "No Tell", "Card Registration Failed", "No Card Number", "No Card Expiry", "No Name", "No New Email", "Restricted 48h", "OTP Failed", "Email Change Failed", "SMS Failed", "Followers Not Found", "Get Followers Failed", "Parse Failed", "Already Entered", "Not Found"]:
                 # カスタムステータス（赤文字）
                 self.update_status(row, result)
             elif result.startswith("Raffled("):
@@ -2757,9 +2763,9 @@ class TaskPage(QWidget):
                 # 最初の成功商品の画像URLを取得
                 if not first_image_url:
                     first_image_url = result.get("image_url", "")
-            elif status == "Already Raffled":
+            elif status in ["Already Raffled", "Already Entered"]:
                 already_raffled_count += 1
-            elif status == "Not Find":
+            elif status in ["Not Find", "Not Found"]:
                 not_find_count += 1
         
         # 画像URLが成功商品から取れなかった場合、1商品目から取得
@@ -5420,8 +5426,16 @@ class LicenseDialog(QDialog):
         
         # タイトルバー（ドラッグ用 + 閉じるボタン）
         title_bar = QHBoxLayout()
-        title_icon = QLabel("🔑")
-        title_icon.setStyleSheet("font-size: 22px; background: transparent;")
+        
+        # ロゴ画像を表示（Base64埋め込み）
+        title_icon = QLabel()
+        logo_base64 = "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"
+        logo_pixmap = QPixmap()
+        logo_pixmap.loadFromData(base64.b64decode(logo_base64))
+        logo_pixmap = logo_pixmap.scaled(28, 28, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+        title_icon.setPixmap(logo_pixmap)
+        title_icon.setFixedSize(28, 28)
+        title_icon.setStyleSheet("background: transparent;")
         title_bar.addWidget(title_icon)
         
         title = QLabel("License Activation")
