@@ -5980,24 +5980,30 @@ class MainWindow(QMainWindow):
 
 
 def main():
-    # ===== 多重起動防止 =====
+    # ===== 多重起動防止（exe同士のみ） =====
     try:
         import ctypes
-        # Mutexを作成（アプリ固有の名前）
-        mutex_name = "ProjectWIN_SingleInstance_Mutex"
-        kernel32 = ctypes.windll.kernel32
-        mutex = kernel32.CreateMutexW(None, False, mutex_name)
-        last_error = kernel32.GetLastError()
         
-        # ERROR_ALREADY_EXISTS (183) = 既に別のインスタンスが起動中
-        if last_error == 183:
-            ctypes.windll.user32.MessageBoxW(
-                None,
-                "Project WIN is already running.\nOnly one instance is allowed.",
-                "Project WIN",
-                0x40  # MB_ICONINFORMATION
-            )
-            return
+        # exe か py かを判定
+        is_frozen = getattr(sys, 'frozen', False)
+        
+        if is_frozen:
+            # exe起動の場合のみ多重起動を防止
+            mutex_name = "ProjectWIN_EXE_SingleInstance_Mutex"
+            kernel32 = ctypes.windll.kernel32
+            mutex = kernel32.CreateMutexW(None, False, mutex_name)
+            last_error = kernel32.GetLastError()
+            
+            # ERROR_ALREADY_EXISTS (183) = 既に別のインスタンスが起動中
+            if last_error == 183:
+                ctypes.windll.user32.MessageBoxW(
+                    None,
+                    "Project WIN is already running.\nOnly one instance is allowed.",
+                    "Project WIN",
+                    0x40  # MB_ICONINFORMATION
+                )
+                return
+        # py起動の場合は多重起動チェックをスキップ（開発用）
     except:
         pass  # ctypesが使えない環境ではスキップ
     
