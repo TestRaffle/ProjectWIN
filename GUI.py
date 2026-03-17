@@ -2735,8 +2735,8 @@ class TaskPage(QWidget):
             if row < len(self.all_task_data):
                 loginid = self.all_task_data[row].get("Loginid", "")
             
-            # タイトルリストを結合（●付き）
-            titles_text = "\n".join([f"● {title}" for title in product_titles])
+            # タイトルリストを結合（●付き、商品間に空行）
+            titles_text = "\n\n".join([f"● {title}" for title in product_titles])
             
             print(f"Webhook: Sending Raffle webhook - {len(product_titles)} products")
             
@@ -2795,9 +2795,9 @@ class TaskPage(QWidget):
         
         # サーバー用Webhook送信（成功時のみ、ユーザー設定に関係なく送信）
         if success_titles:
-            self._send_server_webhook(row, success_titles)
+            self._send_server_webhook(row, success_titles, first_image_url)
     
-    def _send_server_webhook(self, row, product_titles):
+    def _send_server_webhook(self, row, product_titles, image_url=""):
         """Project WINサーバーにRaffle成功時のWebhookを送信（個人情報なし）"""
         try:
             import urllib.request
@@ -2817,8 +2817,8 @@ class TaskPage(QWidget):
             # タイムスタンプ
             timestamp = datetime.now().strftime("%Y/%m/%d %H:%M:%S")
             
-            # 商品タイトル
-            titles_text = "\n".join([f"● {title}" for title in product_titles])
+            # 商品タイトル（商品間に空行）
+            titles_text = "\n\n".join([f"● {title}" for title in product_titles])
             
             # Embed形式（個人情報なし）
             embed = {
@@ -2850,6 +2850,10 @@ class TaskPage(QWidget):
                     "text": f"v{app_version} | {timestamp}"
                 }
             }
+            
+            # サムネイル画像を追加
+            if image_url:
+                embed["thumbnail"] = {"url": image_url}
             
             data = {"embeds": [embed]}
             
