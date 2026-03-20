@@ -22,7 +22,7 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install nuitka pyside6 playwright pycryptodome pillow ordered-set zstandard openpyxl requests beautifulsoup4 lxml
+        pip install nuitka pyside6 playwright pycryptodome pillow ordered-set zstandard openpyxl requests beautifulsoup4 lxml faker
         playwright install chromium
     
     - name: Build with Nuitka
@@ -40,6 +40,8 @@ jobs:
           --include-module=idna ^
           --include-module=bs4 ^
           --include-module=lxml ^
+          --include-module=faker ^
+          --include-module=openpyxl ^
           GUI.py
       shell: cmd
     
