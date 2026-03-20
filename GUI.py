@@ -15,7 +15,7 @@ from PySide6.QtWidgets import (
     QSpinBox, QCheckBox, QGroupBox, QFormLayout, QFrame,
     QSplitter, QListWidget, QListWidgetItem, QFileDialog, QMessageBox,
     QTabWidget, QGraphicsOpacityEffect, QProgressBar, QRadioButton,
-    QMenu, QDialog, QPlainTextEdit
+    QMenu, QDialog, QPlainTextEdit, QScrollArea, QGridLayout
 )
 from PySide6.QtCore import Qt, QSize, QThread, Signal, QTimer, QPropertyAnimation, QEasingCurve, QPoint
 from PySide6.QtGui import QFont, QIcon, QPalette, QColor, QPainter, QPen, QBrush, QPixmap
@@ -437,6 +437,106 @@ class CheckmarkCheckBox(QCheckBox):
             painter.drawRoundedRect(rect, 4, 4)
         
         painter.end()
+
+
+class TextCheckmarkCheckBox(QCheckBox):
+    """テキスト付き緑色チェックマークカスタムチェックボックス（Task風スタイリッシュデザイン）"""
+    
+    def __init__(self, text="", parent=None):
+        super().__init__(text, parent)
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._box_size = 18
+        self.setMouseTracking(True)
+    
+    def set_box_size(self, size):
+        """ボックスサイズを設定"""
+        self._box_size = size
+        self.update()
+    
+    def sizeHint(self):
+        """サイズヒントを返す"""
+        from PySide6.QtCore import QSize
+        fm = self.fontMetrics()
+        text_width = fm.horizontalAdvance(self.text())
+        return QSize(self._box_size + 8 + text_width, max(self._box_size, fm.height()) + 4)
+    
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # ボックスの位置とサイズ
+        box_size = self._box_size
+        box_x = 2
+        box_y = (self.height() - box_size) // 2
+        
+        # ボックスの矩形（内側に2pxマージン）
+        rect_x = box_x + 2
+        rect_y = box_y + 2
+        rect_w = box_size - 4
+        rect_h = box_size - 4
+        
+        if self.isChecked():
+            # チェック時: 緑の枠線
+            pen = QPen(QColor("#27ae60"))
+            pen.setWidth(2)
+            painter.setPen(pen)
+            painter.setBrush(QBrush(Qt.GlobalColor.transparent))
+            painter.drawRoundedRect(rect_x, rect_y, rect_w, rect_h, 4, 4)
+            
+            # チェックマークを描画（Taskと同じ細めでスタイリッシュ）
+            pen = QPen(QColor("#27ae60"))
+            pen.setWidth(2)
+            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+            pen.setJoinStyle(Qt.PenJoinStyle.RoundJoin)
+            painter.setPen(pen)
+            
+            # チェックマーク座標をボックスサイズに合わせてスケール
+            cx = box_x + box_size // 2
+            cy = box_y + box_size // 2
+            
+            if box_size >= 18:
+                # 大きいサイズ（18px）: 小さめのチェックマーク
+                painter.drawLine(box_x + 6, cy, box_x + 8, cy + 2)
+                painter.drawLine(box_x + 8, cy + 2, box_x + 13, cy - 3)
+            else:
+                # 小さいサイズ（14px）: さらに小さめ
+                painter.drawLine(box_x + 4, cy, box_x + 6, cy + 2)
+                painter.drawLine(box_x + 6, cy + 2, box_x + 10, cy - 2)
+        else:
+            # 未チェック時: グレーまたは緑の枠線
+            if self.underMouse():
+                pen = QPen(QColor("#27ae60"))
+            else:
+                pen = QPen(QColor("#505050"))
+            pen.setWidth(2)
+            painter.setPen(pen)
+            painter.setBrush(QBrush(Qt.GlobalColor.transparent))
+            painter.drawRoundedRect(rect_x, rect_y, rect_w, rect_h, 4, 4)
+        
+        # テキストの描画
+        painter.setPen(QColor("#ffffff"))
+        font = painter.font()
+        if self._box_size <= 14:
+            font.setPointSize(9)
+        else:
+            font.setPointSize(10)
+        painter.setFont(font)
+        
+        text_x = box_x + box_size + 6
+        text_y = (self.height() + painter.fontMetrics().ascent() - painter.fontMetrics().descent()) // 2
+        painter.drawText(text_x, text_y, self.text())
+        
+        painter.end()
+    
+    def enterEvent(self, event):
+        """マウスが入った時"""
+        self.update()
+        super().enterEvent(event)
+    
+    def leaveEvent(self, event):
+        """マウスが出た時"""
+        self.update()
+        super().leaveEvent(event)
 
 
 class SwitchButton(QPushButton):
@@ -3106,7 +3206,7 @@ class SettingPage(QWidget):
         layout.setContentsMargins(30, 30, 30, 30)
         layout.setSpacing(20)
         
-        header = QLabel("Setting")
+        header = QLabel("Settings")
         header.setStyleSheet("font-size: 24px; font-weight: bold; color: #ffffff; padding-bottom: 10px;")
         layout.addWidget(header)
         
@@ -3709,11 +3809,131 @@ class SettingPage(QWidget):
             ("Zimbabwe", "zimbabwe"),
         ]
         
+        # SMS-Man用の国コードリスト（数字ID）- アルファベット順
+        self.sms_countries_smsman = [
+            ("Afghanistan", "75"),
+            ("Algeria", "59"),
+            ("Angola", "77"),
+            ("Argentina", "40"),
+            ("Austria", "51"),
+            ("Azerbaijan", "36"),
+            ("Bangladesh", "61"),
+            ("Belarus", "52"),
+            ("Belgium", "83"),
+            ("Bolivia", "93"),
+            ("Botswana", "108"),
+            ("Brazil", "74"),
+            ("Bulgaria", "84"),
+            ("Burkina Faso", "113"),
+            ("Cambodia", "25"),
+            ("Cameroon", "42"),
+            ("Canada", "37"),
+            ("Chad", "43"),
+            ("China", "4"),
+            ("Colombia", "34"),
+            ("Costa Rica", "94"),
+            ("Croatia", "46"),
+            ("Cyprus", "78"),
+            ("Czech Republic", "64"),
+            ("Denmark", "114"),
+            ("DR Congo", "19"),
+            ("Ecuador", "106"),
+            ("Egypt", "22"),
+            ("El Salvador", "102"),
+            ("England", "17"),
+            ("Estonia", "35"),
+            ("Ethiopia", "72"),
+            ("France", "79"),
+            ("Gambia", "29"),
+            ("Germany", "44"),
+            ("Ghana", "39"),
+            ("Guatemala", "95"),
+            ("Guinea", "69"),
+            ("Haiti", "27"),
+            ("Honduras", "89"),
+            ("Hong Kong", "15"),
+            ("Hungary", "85"),
+            ("India", "23"),
+            ("Indonesia", "7"),
+            ("Iran", "58"),
+            ("Iraq", "48"),
+            ("Ireland", "24"),
+            ("Israel", "14"),
+            ("Italy", "87"),
+            ("Ivory Coast", "28"),
+            ("Jamaica", "104"),
+            ("Japan", "116"),
+            ("Jordan", "111"),
+            ("Kazakhstan", "3"),
+            ("Kenya", "9"),
+            ("Kuwait", "101"),
+            ("Kyrgyzstan", "12"),
+            ("Laos", "26"),
+            ("Latvia", "50"),
+            ("Libya", "103"),
+            ("Lithuania", "45"),
+            ("Macau", "21"),
+            ("Madagascar", "18"),
+            ("Malaysia", "8"),
+            ("Mali", "70"),
+            ("Mauritania", "109"),
+            ("Mexico", "55"),
+            ("Moldova", "86"),
+            ("Mongolia", "73"),
+            ("Morocco", "38"),
+            ("Mozambique", "81"),
+            ("Myanmar", "6"),
+            ("Nepal", "82"),
+            ("Netherlands", "49"),
+            ("New Zealand", "68"),
+            ("Nicaragua", "91"),
+            ("Nigeria", "20"),
+            ("Pakistan", "67"),
+            ("Panama", "107"),
+            ("Papua New Guinea", "80"),
+            ("Paraguay", "88"),
+            ("Peru", "66"),
+            ("Philippines", "5"),
+            ("Poland", "16"),
+            ("Portugal", "112"),
+            ("Puerto Rico", "98"),
+            ("Romania", "33"),
+            ("Russia", "1"),
+            ("Saudi Arabia", "54"),
+            ("Senegal", "62"),
+            ("Serbia", "30"),
+            ("Sierra Leone", "110"),
+            ("Slovenia", "60"),
+            ("South Africa", "32"),
+            ("South Korea", "115"),
+            ("Spain", "57"),
+            ("Sri Lanka", "65"),
+            ("Sudan", "99"),
+            ("Sweden", "47"),
+            ("Taiwan", "56"),
+            ("Tanzania", "10"),
+            ("Thailand", "53"),
+            ("Timor-Leste", "92"),
+            ("Togo", "100"),
+            ("Trinidad and Tobago", "105"),
+            ("Tunisia", "90"),
+            ("Turkey", "63"),
+            ("UAE", "96"),
+            ("Uganda", "76"),
+            ("Ukraine", "2"),
+            ("USA", "13"),
+            ("Uzbekistan", "41"),
+            ("Venezuela", "71"),
+            ("Vietnam", "11"),
+            ("Yemen", "31"),
+            ("Zimbabwe", "97"),
+        ]
+        
         # SMSサイトリスト（今後追加可能）
         self.sms_sites = [
             ("HeroSMS", "herosms"),
             ("5sim", "5sim"),
-            # 将来追加: ("SMSPool", "smspool"),
+            ("SMS-Man", "smsman"),
         ]
         
         # 各サイト行を格納
@@ -3776,9 +3996,10 @@ class SettingPage(QWidget):
         row_layout.addWidget(country_label)
         
         country_combo = QComboBox()
+        country_combo.setFixedWidth(150)  # 幅を固定
         country_combo.setStyleSheet("""
             QComboBox { background-color: #3a3a4a; border: 1px solid #404050; border-radius: 4px;
-                padding: 5px 10px; color: #ffffff; font-size: 12px; min-width: 100px; }
+                padding: 5px 10px; color: #ffffff; font-size: 12px; }
             QComboBox:focus { border-color: #4a90d9; }
             QComboBox::drop-down { border: none; width: 20px; }
             QComboBox::down-arrow { image: none; border-left: 4px solid transparent; border-right: 4px solid transparent; border-top: 5px solid #808080; margin-right: 5px; }
@@ -3788,6 +4009,8 @@ class SettingPage(QWidget):
         # サイトごとに国コードリストを切り替え
         if site_id == "5sim":
             countries = self.sms_countries_5sim
+        elif site_id == "smsman":
+            countries = self.sms_countries_smsman
         else:
             countries = self.sms_countries
         
@@ -3891,6 +4114,14 @@ class SettingPage(QWidget):
                     else:
                         balance_label.setText("Error")
                         balance_label.setStyleSheet("color: #e74c3c; background: transparent; font-weight: bold;")
+                elif site_id == "smsman":
+                    balance = self._get_smsman_balance(token)
+                    if balance is not None:
+                        balance_label.setText(f"${balance:.2f}")
+                        balance_label.setStyleSheet("color: #4a90d9; background: transparent; font-weight: bold;")
+                    else:
+                        balance_label.setText("Error")
+                        balance_label.setStyleSheet("color: #e74c3c; background: transparent; font-weight: bold;")
                 else:
                     balance_label.setText("N/A")
                     balance_label.setStyleSheet("color: #808080; background: transparent; font-weight: bold;")
@@ -3958,6 +4189,33 @@ class SettingPage(QWidget):
                     return None
         except Exception as e:
             print(f"5sim API error: {e}")
+            return None
+    
+    def _get_smsman_balance(self, api_key):
+        """SMS-Manの残高を取得（単位: $）"""
+        import urllib.request
+        import json
+        
+        try:
+            url = f"http://api.sms-man.com/stubs/handler_api.php?action=getBalance&api_key={api_key}"
+            req = urllib.request.Request(url, headers={
+                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+            })
+            
+            with urllib.request.urlopen(req, timeout=10) as response:
+                result = response.read().decode('utf-8')
+                
+                # レスポンス形式: ACCESS_BALANCE:123.45（ルーブル）
+                if result.startswith("ACCESS_BALANCE:"):
+                    balance_rub = float(result.split(":")[1])
+                    # ルーブルからドルに変換（概算レート: 1 USD = 約83 RUB）
+                    balance_usd = balance_rub / 83.0
+                    return balance_usd
+                else:
+                    print(f"SMS-Man balance error: {result}")
+                    return None
+        except Exception as e:
+            print(f"SMS-Man API error: {e}")
             return None
     
     def _save_sms_settings(self):
@@ -4882,6 +5140,820 @@ class SettingPage(QWidget):
         """
 
 
+class ToolsPage(QWidget):
+    """ツールページ（タブベース）"""
+    
+    def __init__(self):
+        super().__init__()
+        self.settings_dir = SETTINGS_DIR
+        self.postal_data = {}  # 郵便番号データのキャッシュ
+        self._load_postal_data()
+        self.setup_ui()
+    
+    def _get_data_dir(self):
+        """dataフォルダのパスを取得（exe直下またはスクリプト直下）"""
+        if getattr(sys, 'frozen', False):
+            # PyInstaller/Nuitkaでビルドされた場合
+            base_dir = os.path.dirname(sys.executable)
+        else:
+            # 開発環境
+            base_dir = os.path.dirname(os.path.abspath(__file__))
+        return os.path.join(base_dir, "data", "postal_codes")
+    
+    def _load_postal_data(self):
+        """郵便番号データを読み込み"""
+        import json
+        
+        data_dir = self._get_data_dir()
+        
+        if not os.path.exists(data_dir):
+            print(f"郵便番号データフォルダが見つかりません: {data_dir}")
+            return
+        
+        # 都道府県リスト
+        prefectures = [
+            "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県",
+            "茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県",
+            "新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県", "岐阜県",
+            "静岡県", "愛知県", "三重県", "滋賀県", "京都府", "大阪府", "兵庫県",
+            "奈良県", "和歌山県", "鳥取県", "島根県", "岡山県", "広島県", "山口県",
+            "徳島県", "香川県", "愛媛県", "高知県", "福岡県", "佐賀県", "長崎県",
+            "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"
+        ]
+        
+        for pref in prefectures:
+            json_path = os.path.join(data_dir, f"{pref}.json")
+            if os.path.exists(json_path):
+                try:
+                    with open(json_path, "r", encoding="utf-8") as f:
+                        self.postal_data[pref] = json.load(f)
+                except Exception as e:
+                    print(f"郵便番号データ読み込みエラー ({pref}): {e}")
+    
+    def setup_ui(self):
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setSpacing(20)
+        
+        header = QLabel("Toolbox")
+        header.setStyleSheet("font-size: 24px; font-weight: bold; color: #ffffff; padding-bottom: 10px;")
+        layout.addWidget(header)
+        
+        # トースト通知
+        self.toast = ToastNotification(self)
+        
+        self.tabs = QTabWidget()
+        self.tabs.setStyleSheet(self._tab_style())
+        
+        # 個人情報生成タブ
+        self.identity_tab = self._create_identity_tab()
+        self.tabs.addTab(self.identity_tab, "Personal Generator")
+        
+        layout.addWidget(self.tabs)
+        layout.addStretch()
+    
+    def _tab_style(self):
+        return """
+            QTabWidget::pane { border: 1px solid #404050; border-radius: 10px; background-color: #1e1e2e; }
+            QTabBar::tab { background-color: #2a2a3a; color: #b0b0b0; border: 1px solid #404050;
+                border-bottom: none; border-top-left-radius: 8px; border-top-right-radius: 8px;
+                padding: 10px 25px; margin-right: 2px; font-size: 13px; }
+            QTabBar::tab:selected { background-color: #1e1e2e; color: #ffffff; border-bottom: 2px solid #4a90d9; }
+            QTabBar::tab:hover:!selected { background-color: #3a3a4a; }
+        """
+    
+    def _create_identity_tab(self):
+        """個人情報生成タブを作成"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        
+        # スクロールエリア
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
+        
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setSpacing(20)
+        
+        combo_style = """
+            QComboBox { background-color: #2a2a3a; border: 1px solid #404050; border-radius: 6px;
+                padding: 6px 10px; color: #ffffff; font-size: 12px; min-width: 140px; }
+            QComboBox:focus { border-color: #4a90d9; }
+            QComboBox::drop-down { border: none; width: 20px; }
+            QComboBox::down-arrow { image: none; border-left: 4px solid transparent;
+                border-right: 4px solid transparent; border-top: 5px solid #808080; margin-right: 5px; }
+            QComboBox QAbstractItemView { background-color: #2a2a3a; border: 1px solid #404050;
+                color: #ffffff; selection-background-color: #4a90d9; }
+        """
+        
+        label_style = "color: #b0b0b0; font-size: 13px;"
+        
+        spinbox_style = """
+            QSpinBox { background-color: #2a2a3a; border: 1px solid #404050; border-radius: 6px;
+                padding: 8px 12px; color: #ffffff; font-size: 13px; min-width: 100px; }
+            QSpinBox:focus { border-color: #4a90d9; }
+            QSpinBox::up-button, QSpinBox::down-button { width: 20px; }
+        """
+        
+        # ===== 生成する情報の選択 =====
+        info_group = QGroupBox("Information to Generate")
+        info_group.setStyleSheet("""
+            QGroupBox { font-size: 14px; font-weight: bold; color: #b0b0b0;
+                border: 1px solid #404050; border-radius: 10px; margin-top: 10px; padding-top: 15px; }
+            QGroupBox::title { subcontrol-origin: margin; left: 15px; padding: 0 5px; }
+        """)
+        info_layout = QVBoxLayout(info_group)
+        info_layout.setSpacing(12)
+        
+        # --- 氏名行 ---
+        name_row = QHBoxLayout()
+        name_row.setSpacing(15)
+        name_label = QLabel("氏名 :")
+        name_label.setStyleSheet(label_style)
+        name_label.setFixedWidth(50)
+        name_row.addWidget(name_label)
+        
+        self.chk_name_kanji = TextCheckmarkCheckBox("漢字")
+        self.chk_name_kanji.setChecked(True)
+        name_row.addWidget(self.chk_name_kanji)
+        
+        self.chk_name_kana = TextCheckmarkCheckBox("カタカナ")
+        self.chk_name_kana.setChecked(True)
+        name_row.addWidget(self.chk_name_kana)
+        
+        self.chk_name_romaji = TextCheckmarkCheckBox("ローマ字")
+        name_row.addWidget(self.chk_name_romaji)
+        
+        self.name_format = QComboBox()
+        self.name_format.addItem("区切りなし", "none")
+        self.name_format.addItem("区切りあり", "separate")
+        self.name_format.setStyleSheet(combo_style)
+        name_row.addWidget(self.name_format)
+        
+        name_row.addStretch()
+        info_layout.addLayout(name_row)
+        
+        # --- 住所行 ---
+        address_row = QHBoxLayout()
+        address_row.setSpacing(15)
+        self.chk_address = TextCheckmarkCheckBox("住所")
+        self.chk_address.setChecked(True)
+        address_row.addWidget(self.chk_address)
+        address_row.addStretch()
+        info_layout.addLayout(address_row)
+        
+        # --- 電話番号行 ---
+        phone_row = QHBoxLayout()
+        phone_row.setSpacing(15)
+        self.chk_phone = TextCheckmarkCheckBox("電話番号")
+        self.chk_phone.setChecked(True)
+        phone_row.addWidget(self.chk_phone)
+        
+        self.phone_format = QComboBox()
+        self.phone_format.addItem("区切りあり (090-1234-5678)", "hyphen")
+        self.phone_format.addItem("区切りなし (09012345678)", "none")
+        self.phone_format.setStyleSheet(combo_style)
+        phone_row.addWidget(self.phone_format)
+        
+        phone_row.addStretch()
+        info_layout.addLayout(phone_row)
+        
+        # --- 性別行 ---
+        gender_row = QHBoxLayout()
+        gender_row.setSpacing(15)
+        self.chk_gender = TextCheckmarkCheckBox("性別")
+        self.chk_gender.setChecked(True)
+        gender_row.addWidget(self.chk_gender)
+        gender_row.addStretch()
+        info_layout.addLayout(gender_row)
+        
+        # --- 生年月日行 ---
+        birthday_row = QHBoxLayout()
+        birthday_row.setSpacing(15)
+        self.chk_birthday = TextCheckmarkCheckBox("生年月日")
+        self.chk_birthday.setChecked(True)
+        birthday_row.addWidget(self.chk_birthday)
+        
+        self.birthday_format = QComboBox()
+        self.birthday_format.addItem("YYYY/MM/DD", "slash")
+        self.birthday_format.addItem("YYYYMMDD", "none")
+        self.birthday_format.addItem("YYYY年MM月DD日", "japanese")
+        self.birthday_format.setStyleSheet(combo_style)
+        birthday_row.addWidget(self.birthday_format)
+        
+        birthday_row.addStretch()
+        info_layout.addLayout(birthday_row)
+        
+        scroll_layout.addWidget(info_group)
+        
+        # ===== 都道府県選択 =====
+        pref_group = QGroupBox("Prefecture (複数選択可)")
+        pref_group.setStyleSheet("""
+            QGroupBox { font-size: 14px; font-weight: bold; color: #b0b0b0;
+                border: 1px solid #404050; border-radius: 10px; margin-top: 10px; padding-top: 15px; }
+            QGroupBox::title { subcontrol-origin: margin; left: 15px; padding: 0 5px; }
+        """)
+        pref_layout = QVBoxLayout(pref_group)
+        
+        # 全選択/全解除ボタン
+        pref_btn_layout = QHBoxLayout()
+        select_all_btn = QPushButton("全選択")
+        select_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        select_all_btn.clicked.connect(self._select_all_prefectures)
+        select_all_btn.setStyleSheet("""
+            QPushButton { background-color: #3a3a4a; color: #ffffff; border: 1px solid #404050;
+                border-radius: 4px; padding: 5px 15px; font-size: 12px; }
+            QPushButton:hover { background-color: #4a4a5a; }
+        """)
+        deselect_all_btn = QPushButton("全解除")
+        deselect_all_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        deselect_all_btn.clicked.connect(self._deselect_all_prefectures)
+        deselect_all_btn.setStyleSheet("""
+            QPushButton { background-color: #3a3a4a; color: #ffffff; border: 1px solid #404050;
+                border-radius: 4px; padding: 5px 15px; font-size: 12px; }
+            QPushButton:hover { background-color: #4a4a5a; }
+        """)
+        pref_btn_layout.addWidget(select_all_btn)
+        pref_btn_layout.addWidget(deselect_all_btn)
+        pref_btn_layout.addStretch()
+        pref_layout.addLayout(pref_btn_layout)
+        
+        # 都道府県チェックボックス
+        pref_grid = QGridLayout()
+        pref_grid.setSpacing(5)
+        
+        prefectures = [
+            "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県",
+            "茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県",
+            "新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県", "岐阜県",
+            "静岡県", "愛知県", "三重県", "滋賀県", "京都府", "大阪府", "兵庫県",
+            "奈良県", "和歌山県", "鳥取県", "島根県", "岡山県", "広島県", "山口県",
+            "徳島県", "香川県", "愛媛県", "高知県", "福岡県", "佐賀県", "長崎県",
+            "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"
+        ]
+        
+        self.pref_checkboxes = []
+        
+        for i, pref in enumerate(prefectures):
+            chk = TextCheckmarkCheckBox(pref)
+            chk.set_box_size(14)  # 小さめサイズ
+            chk.setChecked(True)
+            self.pref_checkboxes.append(chk)
+            pref_grid.addWidget(chk, i // 8, i % 8)
+        
+        pref_layout.addLayout(pref_grid)
+        scroll_layout.addWidget(pref_group)
+        
+        # ===== 生成設定 =====
+        gen_group = QGroupBox("Generation Settings")
+        gen_group.setStyleSheet("""
+            QGroupBox { font-size: 14px; font-weight: bold; color: #b0b0b0;
+                border: 1px solid #404050; border-radius: 10px; margin-top: 10px; padding-top: 15px; }
+            QGroupBox::title { subcontrol-origin: margin; left: 15px; padding: 0 5px; }
+        """)
+        gen_layout = QGridLayout(gen_group)
+        gen_layout.setSpacing(15)
+        
+        # SpinBoxの幅を統一するスタイル
+        spinbox_style_fixed = """
+            QSpinBox { background-color: #2a2a3a; border: 1px solid #404050; border-radius: 6px;
+                padding: 8px 12px; color: #ffffff; font-size: 13px; min-width: 70px; max-width: 70px; }
+            QSpinBox:focus { border-color: #4a90d9; }
+            QSpinBox::up-button, QSpinBox::down-button { width: 20px; }
+        """
+        
+        # 生成数
+        count_label = QLabel("生成数:")
+        count_label.setStyleSheet(label_style)
+        self.gen_count = QSpinBox()
+        self.gen_count.setRange(1, 10000)
+        self.gen_count.setValue(100)
+        self.gen_count.setStyleSheet(spinbox_style_fixed)
+        
+        # 年齢範囲
+        age_label = QLabel("年齢範囲:")
+        age_label.setStyleSheet(label_style)
+        age_layout_h = QHBoxLayout()
+        self.age_min = QSpinBox()
+        self.age_min.setRange(0, 120)
+        self.age_min.setValue(20)
+        self.age_min.setStyleSheet(spinbox_style_fixed)
+        age_separator = QLabel("〜")
+        age_separator.setStyleSheet("color: #ffffff; font-size: 14px;")
+        self.age_max = QSpinBox()
+        self.age_max.setRange(0, 120)
+        self.age_max.setValue(40)
+        self.age_max.setStyleSheet(spinbox_style_fixed)
+        age_layout_h.addWidget(self.age_min)
+        age_layout_h.addWidget(age_separator)
+        age_layout_h.addWidget(self.age_max)
+        age_layout_h.addStretch()
+        
+        # 男女比率（ラジオボタン形式）
+        ratio_label = QLabel("男女比率:")
+        ratio_label.setStyleSheet(label_style)
+        
+        ratio_layout = QVBoxLayout()
+        ratio_layout.setSpacing(5)
+        
+        # 男性・女性ラベル行
+        ratio_header = QHBoxLayout()
+        ratio_header.setSpacing(0)
+        ratio_header.addSpacing(45)  # 左マージン
+        
+        male_values = [100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0]
+        self.ratio_buttons = []
+        
+        # ラジオボタン行
+        ratio_buttons_layout = QHBoxLayout()
+        ratio_buttons_layout.setSpacing(8)
+        
+        for val in male_values:
+            radio_btn = QPushButton("●" if val == 50 else "○")
+            radio_btn.setFixedSize(24, 24)
+            radio_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            radio_btn.setStyleSheet(f"background: transparent; color: {'#4a90d9' if val == 50 else '#606060'}; border: none; font-size: 18px;")
+            radio_btn.setProperty("ratio_value", val)
+            radio_btn.clicked.connect(lambda _, v=val: self._select_ratio(v))
+            ratio_buttons_layout.addWidget(radio_btn)
+            self.ratio_buttons.append(radio_btn)
+        ratio_buttons_layout.addStretch()
+        
+        # 男性パーセント行
+        male_row = QHBoxLayout()
+        male_row.setSpacing(8)
+        male_label = QLabel("男性")
+        male_label.setStyleSheet("color: #b0b0b0; font-size: 12px;")
+        male_label.setFixedWidth(40)
+        male_row.addWidget(male_label)
+        for val in male_values:
+            pct_label = QLabel(f"{val}%")
+            pct_label.setStyleSheet("color: #b0b0b0; font-size: 11px;")
+            pct_label.setFixedWidth(24)
+            pct_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            male_row.addWidget(pct_label)
+        male_row.addStretch()
+        
+        # 女性パーセント行
+        female_row = QHBoxLayout()
+        female_row.setSpacing(8)
+        female_label = QLabel("女性")
+        female_label.setStyleSheet("color: #b0b0b0; font-size: 12px;")
+        female_label.setFixedWidth(40)
+        female_row.addWidget(female_label)
+        for val in male_values:
+            pct_label = QLabel(f"{100 - val}%")
+            pct_label.setStyleSheet("color: #b0b0b0; font-size: 11px;")
+            pct_label.setFixedWidth(24)
+            pct_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            female_row.addWidget(pct_label)
+        female_row.addStretch()
+        
+        # ラジオボタン行を追加（ヘッダーの下）
+        ratio_with_label = QHBoxLayout()
+        ratio_with_label.setSpacing(8)
+        ratio_with_label.addSpacing(40)  # "男性"ラベル分のスペース
+        for btn in self.ratio_buttons:
+            ratio_with_label.addWidget(btn)
+        ratio_with_label.addStretch()
+        
+        ratio_layout.addLayout(ratio_with_label)
+        ratio_layout.addLayout(male_row)
+        ratio_layout.addLayout(female_row)
+        
+        self.selected_ratio = 50  # デフォルト値
+        
+        # 出力形式（ラジオボタン形式）
+        output_label = QLabel("出力形式:")
+        output_label.setStyleSheet(label_style)
+        
+        output_layout = QHBoxLayout()
+        output_layout.setSpacing(15)
+        
+        self.radio_xlsx_btn = QPushButton("●")
+        self.radio_xlsx_btn.setFixedSize(24, 24)
+        self.radio_xlsx_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.radio_xlsx_btn.setStyleSheet("background: transparent; color: #4a90d9; border: none; font-size: 18px;")
+        self.radio_xlsx_btn.clicked.connect(lambda: self._select_output_format("xlsx"))
+        
+        xlsx_label = QLabel("Excel (.xlsx)")
+        xlsx_label.setStyleSheet("color: #ffffff; font-size: 13px;")
+        
+        self.radio_csv_btn = QPushButton("○")
+        self.radio_csv_btn.setFixedSize(24, 24)
+        self.radio_csv_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.radio_csv_btn.setStyleSheet("background: transparent; color: #606060; border: none; font-size: 18px;")
+        self.radio_csv_btn.clicked.connect(lambda: self._select_output_format("csv"))
+        
+        csv_label = QLabel("CSV (.csv)")
+        csv_label.setStyleSheet("color: #ffffff; font-size: 13px;")
+        
+        output_layout.addWidget(self.radio_xlsx_btn)
+        output_layout.addWidget(xlsx_label)
+        output_layout.addSpacing(20)
+        output_layout.addWidget(self.radio_csv_btn)
+        output_layout.addWidget(csv_label)
+        output_layout.addStretch()
+        
+        self.selected_output_format = "xlsx"  # デフォルト値
+        
+        gen_layout.addWidget(count_label, 0, 0)
+        gen_layout.addWidget(self.gen_count, 0, 1)
+        gen_layout.addWidget(age_label, 1, 0)
+        gen_layout.addLayout(age_layout_h, 1, 1)
+        gen_layout.addWidget(ratio_label, 2, 0, Qt.AlignmentFlag.AlignTop)
+        gen_layout.addLayout(ratio_layout, 2, 1)
+        gen_layout.addWidget(output_label, 3, 0)
+        gen_layout.addLayout(output_layout, 3, 1)
+        
+        scroll_layout.addWidget(gen_group)
+        
+        scroll_layout.addStretch()
+        scroll.setWidget(scroll_content)
+        layout.addWidget(scroll)
+        
+        # ===== Generateボタン =====
+        gen_btn_layout = QHBoxLayout()
+        generate_btn = QPushButton("Generate")
+        generate_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        generate_btn.clicked.connect(self._generate_identities)
+        generate_btn.setStyleSheet("""
+            QPushButton { background-color: #27ae60; color: white; border: none;
+                border-radius: 6px; padding: 12px 40px; font-size: 14px; font-weight: bold; }
+            QPushButton:hover { background-color: #2ecc71; }
+        """)
+        gen_btn_layout.addStretch()
+        gen_btn_layout.addWidget(generate_btn)
+        gen_btn_layout.addStretch()
+        layout.addLayout(gen_btn_layout)
+        
+        return widget
+    
+    def _select_ratio(self, value):
+        """男女比率を選択"""
+        self.selected_ratio = value
+        male_values = [100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0]
+        for i, btn in enumerate(self.ratio_buttons):
+            is_selected = male_values[i] == value
+            btn.setText("●" if is_selected else "○")
+            btn.setStyleSheet(f"background: transparent; color: {'#4a90d9' if is_selected else '#606060'}; border: none; font-size: 18px;")
+    
+    def _select_output_format(self, fmt):
+        """出力形式を選択"""
+        self.selected_output_format = fmt
+        is_xlsx = fmt == "xlsx"
+        self.radio_xlsx_btn.setText("●" if is_xlsx else "○")
+        self.radio_xlsx_btn.setStyleSheet(f"background: transparent; color: {'#4a90d9' if is_xlsx else '#606060'}; border: none; font-size: 18px;")
+        self.radio_csv_btn.setText("●" if not is_xlsx else "○")
+        self.radio_csv_btn.setStyleSheet(f"background: transparent; color: {'#4a90d9' if not is_xlsx else '#606060'}; border: none; font-size: 18px;")
+    
+    def _select_all_prefectures(self):
+        """全都道府県を選択"""
+        for chk in self.pref_checkboxes:
+            chk.setChecked(True)
+    
+    def _deselect_all_prefectures(self):
+        """全都道府県を解除"""
+        for chk in self.pref_checkboxes:
+            chk.setChecked(False)
+    
+    def _kana_to_romaji(self, kana):
+        """カタカナをローマ字に変換"""
+        kana_romaji_map = {
+            'ア': 'A', 'イ': 'I', 'ウ': 'U', 'エ': 'E', 'オ': 'O',
+            'カ': 'Ka', 'キ': 'Ki', 'ク': 'Ku', 'ケ': 'Ke', 'コ': 'Ko',
+            'サ': 'Sa', 'シ': 'Shi', 'ス': 'Su', 'セ': 'Se', 'ソ': 'So',
+            'タ': 'Ta', 'チ': 'Chi', 'ツ': 'Tsu', 'テ': 'Te', 'ト': 'To',
+            'ナ': 'Na', 'ニ': 'Ni', 'ヌ': 'Nu', 'ネ': 'Ne', 'ノ': 'No',
+            'ハ': 'Ha', 'ヒ': 'Hi', 'フ': 'Fu', 'ヘ': 'He', 'ホ': 'Ho',
+            'マ': 'Ma', 'ミ': 'Mi', 'ム': 'Mu', 'メ': 'Me', 'モ': 'Mo',
+            'ヤ': 'Ya', 'ユ': 'Yu', 'ヨ': 'Yo',
+            'ラ': 'Ra', 'リ': 'Ri', 'ル': 'Ru', 'レ': 'Re', 'ロ': 'Ro',
+            'ワ': 'Wa', 'ヲ': 'Wo', 'ン': 'N',
+            'ガ': 'Ga', 'ギ': 'Gi', 'グ': 'Gu', 'ゲ': 'Ge', 'ゴ': 'Go',
+            'ザ': 'Za', 'ジ': 'Ji', 'ズ': 'Zu', 'ゼ': 'Ze', 'ゾ': 'Zo',
+            'ダ': 'Da', 'ヂ': 'Di', 'ヅ': 'Du', 'デ': 'De', 'ド': 'Do',
+            'バ': 'Ba', 'ビ': 'Bi', 'ブ': 'Bu', 'ベ': 'Be', 'ボ': 'Bo',
+            'パ': 'Pa', 'ピ': 'Pi', 'プ': 'Pu', 'ペ': 'Pe', 'ポ': 'Po',
+            'キャ': 'Kya', 'キュ': 'Kyu', 'キョ': 'Kyo',
+            'シャ': 'Sha', 'シュ': 'Shu', 'ショ': 'Sho',
+            'チャ': 'Cha', 'チュ': 'Chu', 'チョ': 'Cho',
+            'ニャ': 'Nya', 'ニュ': 'Nyu', 'ニョ': 'Nyo',
+            'ヒャ': 'Hya', 'ヒュ': 'Hyu', 'ヒョ': 'Hyo',
+            'ミャ': 'Mya', 'ミュ': 'Myu', 'ミョ': 'Myo',
+            'リャ': 'Rya', 'リュ': 'Ryu', 'リョ': 'Ryo',
+            'ギャ': 'Gya', 'ギュ': 'Gyu', 'ギョ': 'Gyo',
+            'ジャ': 'Ja', 'ジュ': 'Ju', 'ジョ': 'Jo',
+            'ビャ': 'Bya', 'ビュ': 'Byu', 'ビョ': 'Byo',
+            'ピャ': 'Pya', 'ピュ': 'Pyu', 'ピョ': 'Pyo',
+            'ッ': '', 'ー': '',
+            'ァ': 'a', 'ィ': 'i', 'ゥ': 'u', 'ェ': 'e', 'ォ': 'o',
+        }
+        result = []
+        i = 0
+        while i < len(kana):
+            # 2文字の組み合わせを先にチェック
+            if i + 1 < len(kana) and kana[i:i+2] in kana_romaji_map:
+                result.append(kana_romaji_map[kana[i:i+2]])
+                i += 2
+            elif kana[i] in kana_romaji_map:
+                result.append(kana_romaji_map[kana[i]])
+                i += 1
+            else:
+                result.append(kana[i])
+                i += 1
+        # 最初の文字だけ大文字、残りは小文字に
+        romaji = ''.join(result)
+        if romaji:
+            romaji = romaji[0].upper() + romaji[1:].lower()
+        return romaji
+    
+    def _get_name_data(self):
+        """漢字-カタカナ対応の名前データを取得"""
+        # 苗字（漢字, カタカナ）
+        last_names = [
+            ("佐藤", "サトウ"), ("鈴木", "スズキ"), ("高橋", "タカハシ"), ("田中", "タナカ"), ("伊藤", "イトウ"),
+            ("渡辺", "ワタナベ"), ("山本", "ヤマモト"), ("中村", "ナカムラ"), ("小林", "コバヤシ"), ("加藤", "カトウ"),
+            ("吉田", "ヨシダ"), ("山田", "ヤマダ"), ("佐々木", "ササキ"), ("山口", "ヤマグチ"), ("松本", "マツモト"),
+            ("井上", "イノウエ"), ("木村", "キムラ"), ("林", "ハヤシ"), ("斎藤", "サイトウ"), ("清水", "シミズ"),
+            ("山崎", "ヤマザキ"), ("森", "モリ"), ("池田", "イケダ"), ("橋本", "ハシモト"), ("阿部", "アベ"),
+            ("石川", "イシカワ"), ("山下", "ヤマシタ"), ("中島", "ナカジマ"), ("石井", "イシイ"), ("小川", "オガワ"),
+            ("前田", "マエダ"), ("岡田", "オカダ"), ("長谷川", "ハセガワ"), ("藤田", "フジタ"), ("後藤", "ゴトウ"),
+            ("近藤", "コンドウ"), ("村上", "ムラカミ"), ("遠藤", "エンドウ"), ("青木", "アオキ"), ("坂本", "サカモト"),
+            ("藤井", "フジイ"), ("西村", "ニシムラ"), ("福田", "フクダ"), ("太田", "オオタ"), ("三浦", "ミウラ"),
+            ("藤原", "フジワラ"), ("岡本", "オカモト"), ("松田", "マツダ"), ("中野", "ナカノ"), ("原田", "ハラダ"),
+            ("小野", "オノ"), ("田村", "タムラ"), ("竹内", "タケウチ"), ("金子", "カネコ"), ("和田", "ワダ"),
+            ("中山", "ナカヤマ"), ("石田", "イシダ"), ("上田", "ウエダ"), ("森田", "モリタ"), ("原", "ハラ"),
+            ("柴田", "シバタ"), ("酒井", "サカイ"), ("工藤", "クドウ"), ("横山", "ヨコヤマ"), ("宮崎", "ミヤザキ"),
+            ("宮本", "ミヤモト"), ("内田", "ウチダ"), ("高木", "タカギ"), ("安藤", "アンドウ"), ("谷口", "タニグチ"),
+            ("大野", "オオノ"), ("丸山", "マルヤマ"), ("今井", "イマイ"), ("河野", "コウノ"), ("藤本", "フジモト"),
+            ("村田", "ムラタ"), ("武田", "タケダ"), ("上野", "ウエノ"), ("杉山", "スギヤマ"), ("増田", "マスダ"),
+            ("平野", "ヒラノ"), ("大塚", "オオツカ"), ("千葉", "チバ"), ("久保", "クボ"), ("松井", "マツイ"),
+            ("小島", "コジマ"), ("岩崎", "イワサキ"), ("野口", "ノグチ"), ("菊地", "キクチ"), ("木下", "キノシタ"),
+            ("野村", "ノムラ"), ("新井", "アライ"), ("渡部", "ワタベ"), ("櫻井", "サクライ"), ("佐野", "サノ"),
+            ("古川", "フルカワ"), ("熊谷", "クマガイ"), ("菅原", "スガワラ"), ("杉本", "スギモト"), ("市川", "イチカワ"),
+        ]
+        
+        # 男性名（漢字, カタカナ）
+        first_names_male = [
+            ("大翔", "ヒロト"), ("蓮", "レン"), ("悠真", "ユウマ"), ("陽翔", "ハルト"), ("湊", "ミナト"),
+            ("樹", "イツキ"), ("悠人", "ユウト"), ("朝陽", "アサヒ"), ("颯太", "ソウタ"), ("蒼", "アオイ"),
+            ("陽太", "ヨウタ"), ("結翔", "ユイト"), ("翔", "ショウ"), ("大和", "ヤマト"), ("颯真", "ソウマ"),
+            ("健太", "ケンタ"), ("拓海", "タクミ"), ("翔太", "ショウタ"), ("雄大", "ユウダイ"), ("太一", "タイチ"),
+            ("翔平", "ショウヘイ"), ("海斗", "カイト"), ("健", "ケン"), ("大輝", "ダイキ"), ("直樹", "ナオキ"),
+            ("隼人", "ハヤト"), ("駿", "シュン"), ("涼太", "リョウタ"), ("和也", "カズヤ"), ("拓也", "タクヤ"),
+            ("達也", "タツヤ"), ("康平", "コウヘイ"), ("裕太", "ユウタ"), ("亮", "リョウ"), ("健太郎", "ケンタロウ"),
+            ("誠", "マコト"), ("学", "マナブ"), ("充", "ミツル"), ("篤司", "アツシ"), ("慎吾", "シンゴ"),
+            ("浩二", "コウジ"), ("哲也", "テツヤ"), ("秀樹", "ヒデキ"), ("正樹", "マサキ"), ("雅彦", "マサヒコ"),
+            ("博", "ヒロシ"), ("修", "オサム"), ("淳", "アツシ"), ("剛", "ツヨシ"), ("豊", "ユタカ"),
+        ]
+        
+        # 女性名（漢字, カタカナ）
+        first_names_female = [
+            ("陽葵", "ヒマリ"), ("芽依", "メイ"), ("凛", "リン"), ("詩", "ウタ"), ("結菜", "ユイナ"),
+            ("葵", "アオイ"), ("紬", "ツムギ"), ("咲良", "サクラ"), ("結愛", "ユア"), ("莉子", "リコ"),
+            ("美月", "ミヅキ"), ("心春", "コハル"), ("美桜", "ミオ"), ("一花", "イチカ"), ("杏", "アン"),
+            ("美咲", "ミサキ"), ("さくら", "サクラ"), ("花", "ハナ"), ("彩", "アヤ"), ("愛", "アイ"),
+            ("七海", "ナナミ"), ("美優", "ミユ"), ("真央", "マオ"), ("遥", "ハルカ"), ("楓", "カエデ"),
+            ("千尋", "チヒロ"), ("麻衣", "マイ"), ("優花", "ユウカ"), ("彩花", "アヤカ"), ("菜々子", "ナナコ"),
+            ("沙織", "サオリ"), ("理恵", "リエ"), ("絵美", "エミ"), ("明日香", "アスカ"), ("由美", "ユミ"),
+            ("恵", "メグミ"), ("舞", "マイ"), ("瞳", "ヒトミ"), ("香織", "カオリ"), ("智子", "トモコ"),
+            ("裕子", "ユウコ"), ("直美", "ナオミ"), ("美紀", "ミキ"), ("知美", "トモミ"), ("真由美", "マユミ"),
+            ("京子", "キョウコ"), ("典子", "ノリコ"), ("洋子", "ヨウコ"), ("和子", "カズコ"), ("幸子", "サチコ"),
+        ]
+        
+        return last_names, first_names_male, first_names_female
+    
+    def _generate_identities(self):
+        """個人情報を生成"""
+        try:
+            from faker import Faker
+            import random
+            from datetime import datetime
+            import os
+            
+            fake = Faker('ja_JP')
+            
+            # 設定を取得
+            count = self.gen_count.value()
+            min_age = self.age_min.value()
+            max_age = self.age_max.value()
+            male_ratio = self.selected_ratio  # ラジオボタンから取得
+            
+            # 選択された都道府県
+            selected_prefs = [chk.text() for chk in self.pref_checkboxes if chk.isChecked()]
+            if not selected_prefs:
+                self.toast.show_toast("都道府県を1つ以上選択してください", "error")
+                return
+            
+            # 郵便番号データが読み込まれているか確認
+            available_prefs = [p for p in selected_prefs if p in self.postal_data and len(self.postal_data[p]) > 0]
+            if not available_prefs:
+                self.toast.show_toast("郵便番号データが見つかりません。data/postal_codes/フォルダを確認してください", "error")
+                return
+            
+            # フォーマット
+            phone_fmt = self.phone_format.currentData()
+            birthday_fmt = self.birthday_format.currentData()
+            output_fmt = self.selected_output_format  # ラジオボタンから取得
+            
+            # マンション名のリスト
+            mansion_names = ["グランドメゾン", "パークハイツ", "ライオンズマンション", "プラウド", "ブリリア",
+                            "シティタワー", "パークシティ", "ガーデンズ", "レジデンス", "コートハウス",
+                            "グリーンハイツ", "サンライズ", "オーシャンビュー", "スカイタワー", "リバーサイド",
+                            "フォレストヒルズ", "アーバンライフ", "センチュリー", "ロイヤルハイツ", "エスペランサ",
+                            "クレストコート", "ベルメゾン", "シャトレー", "ドミール", "メゾンドール",
+                            "ヴィラージュ", "アクアテラス", "ソレイユ", "ラ・メゾン", "エクセレント"]
+            
+            # データ生成
+            data = []
+            name_fmt = self.name_format.currentData()  # "none" or "separate"
+            
+            for _ in range(count):
+                row = {}
+                
+                # 性別決定
+                is_male = random.randint(1, 100) <= male_ratio
+                gender = "男" if is_male else "女"
+                
+                # 氏名（漢字-カタカナ連動辞書から取得）
+                last_names, first_names_male, first_names_female = self._get_name_data()
+                
+                # 苗字を選択（漢字, カタカナのペア）
+                last_name_pair = random.choice(last_names)
+                last_name = last_name_pair[0]
+                last_kana = last_name_pair[1]
+                
+                # 名前を選択（性別に応じて）
+                if is_male:
+                    first_name_pair = random.choice(first_names_male)
+                else:
+                    first_name_pair = random.choice(first_names_female)
+                first_name = first_name_pair[0]
+                first_kana = first_name_pair[1]
+                
+                # ローマ字変換（カタカナベース）
+                last_romaji = self._kana_to_romaji(last_kana)
+                first_romaji = self._kana_to_romaji(first_kana)
+                
+                # === 氏名 ===
+                if self.chk_name_kanji.isChecked():
+                    if name_fmt == "separate":
+                        row["姓_漢字"] = last_name
+                        row["名_漢字"] = first_name
+                    else:
+                        row["氏名_漢字"] = f"{last_name} {first_name}"
+                
+                if self.chk_name_kana.isChecked():
+                    if name_fmt == "separate":
+                        row["姓_カタカナ"] = last_kana
+                        row["名_カタカナ"] = first_kana
+                    else:
+                        row["氏名_カタカナ"] = f"{last_kana} {first_kana}"
+                
+                if self.chk_name_romaji.isChecked():
+                    if name_fmt == "separate":
+                        row["姓_ローマ字"] = last_romaji
+                        row["名_ローマ字"] = first_romaji
+                    else:
+                        row["氏名_ローマ字"] = f"{last_romaji} {first_romaji}"
+                
+                # === 住所 ===
+                if self.chk_address.isChecked():
+                    # 利用可能な都道府県からランダムに選択
+                    pref = random.choice(available_prefs)
+                    
+                    # その都道府県の実在する郵便番号データからランダムに選択
+                    addr_entry = random.choice(self.postal_data[pref])
+                    zipcode = addr_entry["zip"]
+                    pref_name = addr_entry["pref"]
+                    city = addr_entry["city"]
+                    town = addr_entry["town"]
+                    
+                    # 番地を生成（1-30番地 1-20号）
+                    banchi = random.randint(1, 30)
+                    go = random.randint(1, 20)
+                    banchi_str = f"{banchi}-{go}"
+                    
+                    # マンションをランダムで追加（50%の確率）
+                    if random.random() < 0.5:
+                        mansion = random.choice(mansion_names)
+                        room = random.randint(101, 1505)
+                        mansion_str = f"{mansion}{room}号室"
+                    else:
+                        mansion_str = ""
+                    
+                    # セル分割で出力
+                    row["郵便番号"] = zipcode
+                    row["都道府県"] = pref_name
+                    row["市区町村"] = city
+                    row["町名"] = town
+                    row["番地"] = banchi_str
+                    row["建物名"] = mansion_str
+                
+                # === 電話番号 ===
+                if self.chk_phone.isChecked():
+                    phone = fake.phone_number()
+                    if phone_fmt == "none":
+                        phone = phone.replace("-", "")
+                    row["電話番号"] = phone
+                
+                # === 性別 ===
+                if self.chk_gender.isChecked():
+                    row["性別"] = gender
+                
+                # === 生年月日 ===
+                if self.chk_birthday.isChecked():
+                    birthday = fake.date_of_birth(minimum_age=min_age, maximum_age=max_age)
+                    if birthday_fmt == "slash":
+                        row["生年月日"] = birthday.strftime("%Y/%m/%d")
+                    elif birthday_fmt == "none":
+                        row["生年月日"] = birthday.strftime("%Y%m%d")
+                    else:  # japanese
+                        row["生年月日"] = birthday.strftime("%Y年%m月%d日")
+                
+                data.append(row)
+            
+            # 出力ディレクトリ（_internal/Export/IdentityGenerator）
+            if getattr(sys, 'frozen', False):
+                base_dir = os.path.dirname(sys.executable)
+            else:
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+            export_dir = os.path.join(base_dir, "_internal", "Export", "PersonalGenerator")
+            
+            os.makedirs(export_dir, exist_ok=True)
+            
+            # ファイル名（タイムスタンプ付き）
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            if output_fmt == "xlsx":
+                # Excel出力
+                import openpyxl
+                from openpyxl.styles import Font, PatternFill, Alignment
+                
+                wb = openpyxl.Workbook()
+                ws = wb.active
+                ws.title = "Generated Data"
+                
+                # ヘッダー
+                if data:
+                    headers = list(data[0].keys())
+                    for col, header in enumerate(headers, 1):
+                        cell = ws.cell(row=1, column=col, value=header)
+                        cell.font = Font(bold=True, color="FFFFFF")
+                        cell.fill = PatternFill(start_color="4A90D9", end_color="4A90D9", fill_type="solid")
+                        cell.alignment = Alignment(horizontal="center")
+                    
+                    # データ
+                    for row_idx, row_data in enumerate(data, 2):
+                        for col_idx, header in enumerate(headers, 1):
+                            ws.cell(row=row_idx, column=col_idx, value=row_data.get(header, ""))
+                    
+                    # 列幅調整
+                    for col in ws.columns:
+                        max_length = 0
+                        column = col[0].column_letter
+                        for cell in col:
+                            try:
+                                if len(str(cell.value)) > max_length:
+                                    max_length = len(str(cell.value))
+                            except:
+                                pass
+                        adjusted_width = min(max_length + 2, 50)
+                        ws.column_dimensions[column].width = adjusted_width
+                
+                filepath = os.path.join(export_dir, f"personal_{timestamp}.xlsx")
+                wb.save(filepath)
+                
+            else:
+                # CSV出力
+                import csv
+                filepath = os.path.join(export_dir, f"personal_{timestamp}.csv")
+                
+                if data:
+                    headers = list(data[0].keys())
+                    with open(filepath, 'w', newline='', encoding='utf-8-sig') as f:
+                        writer = csv.DictWriter(f, fieldnames=headers)
+                        writer.writeheader()
+                        writer.writerows(data)
+            
+            self.toast.show_toast(f"生成完了: {filepath}", "success")
+            
+            # フォルダを開く
+            if os.path.exists(export_dir):
+                os.startfile(export_dir)
+                
+        except ImportError as e:
+            self.toast.show_toast(f"必要なライブラリがありません: {e}", "error")
+        except Exception as e:
+            self.toast.show_toast(f"生成エラー: {e}", "error")
+            import traceback
+            traceback.print_exc()
+
+
 class ProxyPage(QWidget):
     """プロキシ設定ページ"""
     
@@ -4898,7 +5970,7 @@ class ProxyPage(QWidget):
         layout.setSpacing(20)
         
         # ヘッダー
-        header = QLabel("Proxy")
+        header = QLabel("Proxies")
         header.setStyleSheet("""
             font-size: 24px;
             font-weight: bold;
@@ -5759,21 +6831,26 @@ class MainWindow(QMainWindow):
         # ナビゲーションボタン（Base64アイコン使用）
         self.nav_buttons = []
         
-        self.task_btn = SidebarButton("Task", "task")
+        self.task_btn = SidebarButton("Tasks", "task")
         self.task_btn.setChecked(True)
         self.task_btn.clicked.connect(lambda: self.switch_page(0))
         sidebar_layout.addWidget(self.task_btn)
         self.nav_buttons.append(self.task_btn)
         
-        self.setting_btn = SidebarButton("Setting", "settings")
+        self.setting_btn = SidebarButton("Settings", "settings")
         self.setting_btn.clicked.connect(lambda: self.switch_page(1))
         sidebar_layout.addWidget(self.setting_btn)
         self.nav_buttons.append(self.setting_btn)
         
-        self.proxy_btn = SidebarButton("Proxy", "web")
+        self.proxy_btn = SidebarButton("Proxies", "web")
         self.proxy_btn.clicked.connect(lambda: self.switch_page(2))
         sidebar_layout.addWidget(self.proxy_btn)
         self.nav_buttons.append(self.proxy_btn)
+        
+        self.tools_btn = SidebarButton("Toolbox", "box")
+        self.tools_btn.clicked.connect(lambda: self.switch_page(3))
+        sidebar_layout.addWidget(self.tools_btn)
+        self.nav_buttons.append(self.tools_btn)
         
         # スペーサー（ボタンと折りたたみボタンの間隔）
         sidebar_layout.addSpacing(80)
@@ -5906,12 +6983,14 @@ class MainWindow(QMainWindow):
         # 各ページを追加（参照を保持）
         self.proxy_page = ProxyPage()
         self.setting_page = SettingPage()
+        self.tools_page = ToolsPage()
         self.task_page = TaskPage(self.proxy_page)
         self.task_page.settings_page = self.setting_page  # Webhook送信用に参照を設定
         
         self.content_stack.addWidget(self.task_page)
         self.content_stack.addWidget(self.setting_page)
         self.content_stack.addWidget(self.proxy_page)
+        self.content_stack.addWidget(self.tools_page)
         
         content_layout.addWidget(self.content_stack)
         
