@@ -60,9 +60,6 @@ jobs:
         mkdir release\_internal\cookies\Amazon
         mkdir release\_internal\cookies\iCloud
         
-        rem 郵便番号データをコピー（Personal Generator用）
-        xcopy /E /I data\postal_codes release\data\postal_codes
-        
         rem version.jsonを作成（タグからvを除去）
         set VERSION=${{ github.ref_name }}
         set VERSION=%VERSION:v=%

@@ -7,6 +7,7 @@ import sys
 import os
 import subprocess
 import json
+import urllib.parse
 from pathlib import Path
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -1114,6 +1115,23 @@ class TaskPage(QWidget):
         
         header_layout.addWidget(headless_container)
         
+        # Use Localチェックボックス
+        uselocal_container = QWidget()
+        uselocal_layout = QHBoxLayout(uselocal_container)
+        uselocal_layout.setContentsMargins(0, 0, 15, 0)
+        uselocal_layout.setSpacing(8)
+        
+        self.uselocal_checkbox = CheckmarkCheckBox()
+        uselocal_layout.addWidget(self.uselocal_checkbox)
+        
+        uselocal_label = QLabel("Use Local")
+        uselocal_label.setStyleSheet("color: #ffffff; font-size: 14px; font-weight: bold;")
+        uselocal_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        uselocal_label.mousePressEvent = lambda e: self.uselocal_checkbox.setChecked(not self.uselocal_checkbox.isChecked())
+        uselocal_layout.addWidget(uselocal_label)
+        
+        header_layout.addWidget(uselocal_container)
+        
         # 時計表示
         self.clock_label = QLabel()
         self.clock_label.setStyleSheet("color: #b0b0b0; font-size: 14px; font-family: monospace; margin-right: 15px;")
@@ -2087,24 +2105,32 @@ class TaskPage(QWidget):
             return
         
         # プロキシ設定を適用
+        # 優先順位: 1. サイドバーProxy ON → ランダムプロキシ
+        #          2. Use Local ON → ローカル回線（プロキシなし）
+        #          3. どちらもOFF → Excelのプロキシを使用
         if self.proxy_page:
             random_proxy = self.proxy_page.get_random_proxy()
             if random_proxy:
+                # サイドバーProxyがON → ランダムプロキシを使用
                 task_data["Proxy"] = random_proxy
-                # all_task_dataも更新
                 if row < len(self.all_task_data):
                     self.all_task_data[row]["Proxy"] = random_proxy
-                # テーブルのProxy列も更新
                 self._update_proxy_cell(row, random_proxy)
                 print(f"[Proxy] Using random proxy: {random_proxy}")
+            elif self.uselocal_checkbox.isChecked():
+                # Use LocalがON → ローカル回線（プロキシなし）
+                task_data["Proxy"] = ""
+                if row < len(self.all_task_data):
+                    self.all_task_data[row]["Proxy"] = ""
+                self._update_proxy_cell(row, "")
+                print(f"[Proxy] Using local (Use Local enabled)")
             else:
-                # ProxyがOFF（またはグループ未選択）の場合、元のExcelデータを使用
+                # どちらもOFF → 元のExcelデータを使用
                 if row < len(self.original_task_data):
                     original_proxy = self.original_task_data[row].get("Proxy", "")
                     task_data["Proxy"] = original_proxy
                     if row < len(self.all_task_data):
                         self.all_task_data[row]["Proxy"] = original_proxy
-                    # テーブルのProxy列も更新
                     self._update_proxy_cell(row, original_proxy)
                     if original_proxy:
                         print(f"[Proxy] Using Excel proxy: {original_proxy}")
@@ -5143,52 +5169,93 @@ class SettingPage(QWidget):
 class ToolsPage(QWidget):
     """ツールページ（タブベース）"""
     
+    # GitHubの郵便番号データURL（Raw URL）
+    POSTAL_DATA_BASE_URL = "https://raw.githubusercontent.com/TestRaffle/projectwin-assets/main/data/postal_codes"
+    
     def __init__(self):
         super().__init__()
         self.settings_dir = SETTINGS_DIR
-        self.postal_data = {}  # 郵便番号データのキャッシュ
-        self._load_postal_data()
+        self.postal_data = {}  # 郵便番号データのメモリキャッシュ
         self.setup_ui()
     
-    def _get_data_dir(self):
-        """dataフォルダのパスを取得（exe直下またはスクリプト直下）"""
-        if getattr(sys, 'frozen', False):
-            # PyInstaller/Nuitkaでビルドされた場合
-            base_dir = os.path.dirname(sys.executable)
+    def _get_cache_dir(self):
+        """キャッシュディレクトリのパスを取得（AppData/Local/ProjectWIN/postal_codes）"""
+        if sys.platform == "win32":
+            appdata = os.environ.get("LOCALAPPDATA", os.path.expanduser("~"))
+            cache_dir = os.path.join(appdata, "ProjectWIN", "postal_codes")
         else:
-            # 開発環境
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-        return os.path.join(base_dir, "data", "postal_codes")
+            cache_dir = os.path.join(os.path.expanduser("~"), ".projectwin", "postal_codes")
+        
+        # ディレクトリが存在しなければ作成
+        if not os.path.exists(cache_dir):
+            os.makedirs(cache_dir, exist_ok=True)
+        
+        return cache_dir
     
-    def _load_postal_data(self):
-        """郵便番号データを読み込み"""
+    def _download_postal_data(self, prefecture):
+        """GitHubから都道府県の郵便番号データをダウンロード"""
         import json
+        import urllib.request
+        import urllib.error
         
-        data_dir = self._get_data_dir()
+        cache_dir = self._get_cache_dir()
+        cache_path = os.path.join(cache_dir, f"{prefecture}.json")
         
-        if not os.path.exists(data_dir):
-            print(f"郵便番号データフォルダが見つかりません: {data_dir}")
-            return
+        # キャッシュが存在すればそれを使用
+        if os.path.exists(cache_path):
+            try:
+                with open(cache_path, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception as e:
+                print(f"キャッシュ読み込みエラー ({prefecture}): {e}")
+                # キャッシュが壊れている場合は再ダウンロード
         
-        # 都道府県リスト
-        prefectures = [
-            "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県",
-            "茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県",
-            "新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県", "岐阜県",
-            "静岡県", "愛知県", "三重県", "滋賀県", "京都府", "大阪府", "兵庫県",
-            "奈良県", "和歌山県", "鳥取県", "島根県", "岡山県", "広島県", "山口県",
-            "徳島県", "香川県", "愛媛県", "高知県", "福岡県", "佐賀県", "長崎県",
-            "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"
-        ]
+        # GitHubからダウンロード
+        url = f"{self.POSTAL_DATA_BASE_URL}/{urllib.parse.quote(prefecture)}.json"
+        print(f"郵便番号データをダウンロード中: {prefecture}")
         
+        try:
+            req = urllib.request.Request(url, headers={"User-Agent": "ProjectWIN/1.0"})
+            with urllib.request.urlopen(req, timeout=30) as response:
+                data = json.loads(response.read().decode("utf-8"))
+            
+            # キャッシュに保存
+            try:
+                with open(cache_path, "w", encoding="utf-8") as f:
+                    json.dump(data, f, ensure_ascii=False)
+            except Exception as e:
+                print(f"キャッシュ保存エラー ({prefecture}): {e}")
+            
+            return data
+            
+        except urllib.error.HTTPError as e:
+            print(f"ダウンロードエラー ({prefecture}): HTTP {e.code}")
+            return None
+        except urllib.error.URLError as e:
+            print(f"ダウンロードエラー ({prefecture}): {e.reason}")
+            return None
+        except Exception as e:
+            print(f"ダウンロードエラー ({prefecture}): {e}")
+            return None
+    
+    def _get_postal_data(self, prefectures):
+        """指定された都道府県の郵便番号データを取得（キャッシュまたはダウンロード）"""
+        missing_prefs = []
+        
+        # メモリキャッシュにない都道府県を特定
         for pref in prefectures:
-            json_path = os.path.join(data_dir, f"{pref}.json")
-            if os.path.exists(json_path):
-                try:
-                    with open(json_path, "r", encoding="utf-8") as f:
-                        self.postal_data[pref] = json.load(f)
-                except Exception as e:
-                    print(f"郵便番号データ読み込みエラー ({pref}): {e}")
+            if pref not in self.postal_data:
+                missing_prefs.append(pref)
+        
+        # 不足分をダウンロード
+        for pref in missing_prefs:
+            data = self._download_postal_data(pref)
+            if data:
+                self.postal_data[pref] = data
+        
+        # 利用可能な都道府県のリストを返す
+        available = [p for p in prefectures if p in self.postal_data and len(self.postal_data[p]) > 0]
+        return available
     
     def setup_ui(self):
         layout = QVBoxLayout(self)
@@ -5209,8 +5276,11 @@ class ToolsPage(QWidget):
         self.identity_tab = self._create_identity_tab()
         self.tabs.addTab(self.identity_tab, "Personal Generator")
         
-        layout.addWidget(self.tabs)
-        layout.addStretch()
+        # パスワード生成タブ
+        self.password_tab = self._create_password_tab()
+        self.tabs.addTab(self.password_tab, "Password Generator")
+        
+        layout.addWidget(self.tabs, 1)  # stretch factor 1 でタブを広げる
     
     def _tab_style(self):
         return """
@@ -5229,15 +5299,6 @@ class ToolsPage(QWidget):
         layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
         
-        # スクロールエリア
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
-        
-        scroll_content = QWidget()
-        scroll_layout = QVBoxLayout(scroll_content)
-        scroll_layout.setSpacing(20)
-        
         combo_style = """
             QComboBox { background-color: #2a2a3a; border: 1px solid #404050; border-radius: 6px;
                 padding: 6px 10px; color: #ffffff; font-size: 12px; min-width: 140px; }
@@ -5251,24 +5312,30 @@ class ToolsPage(QWidget):
         
         label_style = "color: #b0b0b0; font-size: 13px;"
         
-        spinbox_style = """
+        spinbox_style_fixed = """
             QSpinBox { background-color: #2a2a3a; border: 1px solid #404050; border-radius: 6px;
-                padding: 8px 12px; color: #ffffff; font-size: 13px; min-width: 100px; }
+                padding: 8px 12px; color: #ffffff; font-size: 13px; min-width: 70px; max-width: 70px; }
             QSpinBox:focus { border-color: #4a90d9; }
             QSpinBox::up-button, QSpinBox::down-button { width: 20px; }
         """
         
-        # ===== 生成する情報の選択 =====
-        info_group = QGroupBox("Information to Generate")
-        info_group.setStyleSheet("""
+        groupbox_style = """
             QGroupBox { font-size: 14px; font-weight: bold; color: #b0b0b0;
                 border: 1px solid #404050; border-radius: 10px; margin-top: 10px; padding-top: 15px; }
             QGroupBox::title { subcontrol-origin: margin; left: 15px; padding: 0 5px; }
-        """)
+        """
+        
+        # ===== 上部エリア（左: Information to Generate、右: Generation Settings）=====
+        top_layout = QHBoxLayout()
+        top_layout.setSpacing(15)
+        
+        # --- 左側: Information to Generate ---
+        info_group = QGroupBox("Information to Generate")
+        info_group.setStyleSheet(groupbox_style)
         info_layout = QVBoxLayout(info_group)
         info_layout.setSpacing(12)
         
-        # --- 氏名行 ---
+        # 氏名行
         name_row = QHBoxLayout()
         name_row.setSpacing(15)
         name_label = QLabel("氏名 :")
@@ -5277,11 +5344,9 @@ class ToolsPage(QWidget):
         name_row.addWidget(name_label)
         
         self.chk_name_kanji = TextCheckmarkCheckBox("漢字")
-        self.chk_name_kanji.setChecked(True)
         name_row.addWidget(self.chk_name_kanji)
         
         self.chk_name_kana = TextCheckmarkCheckBox("カタカナ")
-        self.chk_name_kana.setChecked(True)
         name_row.addWidget(self.chk_name_kana)
         
         self.chk_name_romaji = TextCheckmarkCheckBox("ローマ字")
@@ -5296,20 +5361,18 @@ class ToolsPage(QWidget):
         name_row.addStretch()
         info_layout.addLayout(name_row)
         
-        # --- 住所行 ---
+        # 住所行
         address_row = QHBoxLayout()
         address_row.setSpacing(15)
         self.chk_address = TextCheckmarkCheckBox("住所")
-        self.chk_address.setChecked(True)
         address_row.addWidget(self.chk_address)
         address_row.addStretch()
         info_layout.addLayout(address_row)
         
-        # --- 電話番号行 ---
+        # 電話番号行
         phone_row = QHBoxLayout()
         phone_row.setSpacing(15)
         self.chk_phone = TextCheckmarkCheckBox("電話番号")
-        self.chk_phone.setChecked(True)
         phone_row.addWidget(self.chk_phone)
         
         self.phone_format = QComboBox()
@@ -5321,20 +5384,18 @@ class ToolsPage(QWidget):
         phone_row.addStretch()
         info_layout.addLayout(phone_row)
         
-        # --- 性別行 ---
+        # 性別行
         gender_row = QHBoxLayout()
         gender_row.setSpacing(15)
         self.chk_gender = TextCheckmarkCheckBox("性別")
-        self.chk_gender.setChecked(True)
         gender_row.addWidget(self.chk_gender)
         gender_row.addStretch()
         info_layout.addLayout(gender_row)
         
-        # --- 生年月日行 ---
+        # 生年月日行
         birthday_row = QHBoxLayout()
         birthday_row.setSpacing(15)
         self.chk_birthday = TextCheckmarkCheckBox("生年月日")
-        self.chk_birthday.setChecked(True)
         birthday_row.addWidget(self.chk_birthday)
         
         self.birthday_format = QComboBox()
@@ -5347,15 +5408,152 @@ class ToolsPage(QWidget):
         birthday_row.addStretch()
         info_layout.addLayout(birthday_row)
         
-        scroll_layout.addWidget(info_group)
+        top_layout.addWidget(info_group, 1)  # stretch factor 1
+        
+        # --- 右側: Generation Settings ---
+        gen_group = QGroupBox("Generation Settings")
+        gen_group.setStyleSheet(groupbox_style)
+        gen_layout = QVBoxLayout(gen_group)
+        gen_layout.setSpacing(12)
+        
+        # 生成数
+        count_row = QHBoxLayout()
+        count_label = QLabel("生成数:")
+        count_label.setStyleSheet(label_style)
+        count_label.setFixedWidth(70)
+        self.gen_count = QSpinBox()
+        self.gen_count.setRange(1, 10000)
+        self.gen_count.setValue(100)
+        self.gen_count.setStyleSheet(spinbox_style_fixed)
+        count_row.addWidget(count_label)
+        count_row.addWidget(self.gen_count)
+        count_row.addStretch()
+        gen_layout.addLayout(count_row)
+        
+        # 年齢範囲
+        age_row = QHBoxLayout()
+        age_label = QLabel("年齢範囲:")
+        age_label.setStyleSheet(label_style)
+        age_label.setFixedWidth(70)
+        self.age_min = QSpinBox()
+        self.age_min.setRange(0, 120)
+        self.age_min.setValue(20)
+        self.age_min.setStyleSheet(spinbox_style_fixed)
+        age_separator = QLabel("〜")
+        age_separator.setStyleSheet("color: #ffffff; font-size: 14px;")
+        self.age_max = QSpinBox()
+        self.age_max.setRange(0, 120)
+        self.age_max.setValue(40)
+        self.age_max.setStyleSheet(spinbox_style_fixed)
+        age_row.addWidget(age_label)
+        age_row.addWidget(self.age_min)
+        age_row.addWidget(age_separator)
+        age_row.addWidget(self.age_max)
+        age_row.addStretch()
+        gen_layout.addLayout(age_row)
+        
+        # 男女比率
+        ratio_label = QLabel("男女比率:")
+        ratio_label.setStyleSheet(label_style)
+        gen_layout.addWidget(ratio_label)
+        
+        # ラジオボタン行
+        male_values = [100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0]
+        self.ratio_buttons = []
+        
+        ratio_buttons_row = QHBoxLayout()
+        ratio_buttons_row.setSpacing(4)
+        ratio_buttons_row.addSpacing(30)  # 「男性」ラベル分のスペース
+        for val in male_values:
+            radio_btn = QPushButton("●" if val == 50 else "○")
+            radio_btn.setFixedSize(20, 20)
+            radio_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            radio_btn.setStyleSheet(f"background: transparent; color: {'#4a90d9' if val == 50 else '#606060'}; border: none; font-size: 14px;")
+            radio_btn.setProperty("ratio_value", val)
+            radio_btn.clicked.connect(lambda _, v=val: self._select_ratio(v))
+            ratio_buttons_row.addWidget(radio_btn)
+            self.ratio_buttons.append(radio_btn)
+        ratio_buttons_row.addStretch()
+        gen_layout.addLayout(ratio_buttons_row)
+        
+        # 男性パーセント行
+        male_row = QHBoxLayout()
+        male_row.setSpacing(4)
+        male_lbl = QLabel("男性")
+        male_lbl.setStyleSheet("color: #b0b0b0; font-size: 10px;")
+        male_lbl.setFixedWidth(30)
+        male_row.addWidget(male_lbl)
+        for val in male_values:
+            pct = QLabel(f"{val}%")
+            pct.setStyleSheet("color: #b0b0b0; font-size: 9px;")
+            pct.setFixedWidth(20)
+            pct.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            male_row.addWidget(pct)
+        male_row.addStretch()
+        gen_layout.addLayout(male_row)
+        
+        # 女性パーセント行
+        female_row = QHBoxLayout()
+        female_row.setSpacing(4)
+        female_lbl = QLabel("女性")
+        female_lbl.setStyleSheet("color: #b0b0b0; font-size: 10px;")
+        female_lbl.setFixedWidth(30)
+        female_row.addWidget(female_lbl)
+        for val in male_values:
+            pct = QLabel(f"{100-val}%")
+            pct.setStyleSheet("color: #b0b0b0; font-size: 9px;")
+            pct.setFixedWidth(20)
+            pct.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            female_row.addWidget(pct)
+        female_row.addStretch()
+        gen_layout.addLayout(female_row)
+        
+        self.selected_ratio = 50
+        
+        # 出力形式
+        output_row = QHBoxLayout()
+        output_row.setSpacing(10)
+        output_label = QLabel("出力形式:")
+        output_label.setStyleSheet(label_style)
+        output_label.setFixedWidth(70)
+        
+        self.radio_xlsx_btn = QPushButton("●")
+        self.radio_xlsx_btn.setFixedSize(20, 20)
+        self.radio_xlsx_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.radio_xlsx_btn.setStyleSheet("background: transparent; color: #4a90d9; border: none; font-size: 14px;")
+        self.radio_xlsx_btn.clicked.connect(lambda: self._select_output_format("xlsx"))
+        
+        xlsx_label = QLabel("Excel")
+        xlsx_label.setStyleSheet("color: #ffffff; font-size: 12px;")
+        
+        self.radio_csv_btn = QPushButton("○")
+        self.radio_csv_btn.setFixedSize(20, 20)
+        self.radio_csv_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.radio_csv_btn.setStyleSheet("background: transparent; color: #606060; border: none; font-size: 14px;")
+        self.radio_csv_btn.clicked.connect(lambda: self._select_output_format("csv"))
+        
+        csv_label = QLabel("CSV")
+        csv_label.setStyleSheet("color: #ffffff; font-size: 12px;")
+        
+        output_row.addWidget(output_label)
+        output_row.addWidget(self.radio_xlsx_btn)
+        output_row.addWidget(xlsx_label)
+        output_row.addSpacing(10)
+        output_row.addWidget(self.radio_csv_btn)
+        output_row.addWidget(csv_label)
+        output_row.addStretch()
+        gen_layout.addLayout(output_row)
+        
+        self.selected_output_format = "xlsx"
+        
+        gen_layout.addStretch()
+        top_layout.addWidget(gen_group, 1)  # stretch factor 1 で残りのスペースを使う
+        
+        layout.addLayout(top_layout)
         
         # ===== 都道府県選択 =====
         pref_group = QGroupBox("Prefecture (複数選択可)")
-        pref_group.setStyleSheet("""
-            QGroupBox { font-size: 14px; font-weight: bold; color: #b0b0b0;
-                border: 1px solid #404050; border-radius: 10px; margin-top: 10px; padding-top: 15px; }
-            QGroupBox::title { subcontrol-origin: margin; left: 15px; padding: 0 5px; }
-        """)
+        pref_group.setStyleSheet(groupbox_style)
         pref_layout = QVBoxLayout(pref_group)
         
         # 全選択/全解除ボタン
@@ -5399,181 +5597,12 @@ class ToolsPage(QWidget):
         
         for i, pref in enumerate(prefectures):
             chk = TextCheckmarkCheckBox(pref)
-            chk.set_box_size(14)  # 小さめサイズ
-            chk.setChecked(True)
+            chk.set_box_size(14)
             self.pref_checkboxes.append(chk)
             pref_grid.addWidget(chk, i // 8, i % 8)
         
         pref_layout.addLayout(pref_grid)
-        scroll_layout.addWidget(pref_group)
-        
-        # ===== 生成設定 =====
-        gen_group = QGroupBox("Generation Settings")
-        gen_group.setStyleSheet("""
-            QGroupBox { font-size: 14px; font-weight: bold; color: #b0b0b0;
-                border: 1px solid #404050; border-radius: 10px; margin-top: 10px; padding-top: 15px; }
-            QGroupBox::title { subcontrol-origin: margin; left: 15px; padding: 0 5px; }
-        """)
-        gen_layout = QGridLayout(gen_group)
-        gen_layout.setSpacing(15)
-        
-        # SpinBoxの幅を統一するスタイル
-        spinbox_style_fixed = """
-            QSpinBox { background-color: #2a2a3a; border: 1px solid #404050; border-radius: 6px;
-                padding: 8px 12px; color: #ffffff; font-size: 13px; min-width: 70px; max-width: 70px; }
-            QSpinBox:focus { border-color: #4a90d9; }
-            QSpinBox::up-button, QSpinBox::down-button { width: 20px; }
-        """
-        
-        # 生成数
-        count_label = QLabel("生成数:")
-        count_label.setStyleSheet(label_style)
-        self.gen_count = QSpinBox()
-        self.gen_count.setRange(1, 10000)
-        self.gen_count.setValue(100)
-        self.gen_count.setStyleSheet(spinbox_style_fixed)
-        
-        # 年齢範囲
-        age_label = QLabel("年齢範囲:")
-        age_label.setStyleSheet(label_style)
-        age_layout_h = QHBoxLayout()
-        self.age_min = QSpinBox()
-        self.age_min.setRange(0, 120)
-        self.age_min.setValue(20)
-        self.age_min.setStyleSheet(spinbox_style_fixed)
-        age_separator = QLabel("〜")
-        age_separator.setStyleSheet("color: #ffffff; font-size: 14px;")
-        self.age_max = QSpinBox()
-        self.age_max.setRange(0, 120)
-        self.age_max.setValue(40)
-        self.age_max.setStyleSheet(spinbox_style_fixed)
-        age_layout_h.addWidget(self.age_min)
-        age_layout_h.addWidget(age_separator)
-        age_layout_h.addWidget(self.age_max)
-        age_layout_h.addStretch()
-        
-        # 男女比率（ラジオボタン形式）
-        ratio_label = QLabel("男女比率:")
-        ratio_label.setStyleSheet(label_style)
-        
-        ratio_layout = QVBoxLayout()
-        ratio_layout.setSpacing(5)
-        
-        # 男性・女性ラベル行
-        ratio_header = QHBoxLayout()
-        ratio_header.setSpacing(0)
-        ratio_header.addSpacing(45)  # 左マージン
-        
-        male_values = [100, 90, 80, 70, 60, 50, 40, 30, 20, 10, 0]
-        self.ratio_buttons = []
-        
-        # ラジオボタン行
-        ratio_buttons_layout = QHBoxLayout()
-        ratio_buttons_layout.setSpacing(8)
-        
-        for val in male_values:
-            radio_btn = QPushButton("●" if val == 50 else "○")
-            radio_btn.setFixedSize(24, 24)
-            radio_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-            radio_btn.setStyleSheet(f"background: transparent; color: {'#4a90d9' if val == 50 else '#606060'}; border: none; font-size: 18px;")
-            radio_btn.setProperty("ratio_value", val)
-            radio_btn.clicked.connect(lambda _, v=val: self._select_ratio(v))
-            ratio_buttons_layout.addWidget(radio_btn)
-            self.ratio_buttons.append(radio_btn)
-        ratio_buttons_layout.addStretch()
-        
-        # 男性パーセント行
-        male_row = QHBoxLayout()
-        male_row.setSpacing(8)
-        male_label = QLabel("男性")
-        male_label.setStyleSheet("color: #b0b0b0; font-size: 12px;")
-        male_label.setFixedWidth(40)
-        male_row.addWidget(male_label)
-        for val in male_values:
-            pct_label = QLabel(f"{val}%")
-            pct_label.setStyleSheet("color: #b0b0b0; font-size: 11px;")
-            pct_label.setFixedWidth(24)
-            pct_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            male_row.addWidget(pct_label)
-        male_row.addStretch()
-        
-        # 女性パーセント行
-        female_row = QHBoxLayout()
-        female_row.setSpacing(8)
-        female_label = QLabel("女性")
-        female_label.setStyleSheet("color: #b0b0b0; font-size: 12px;")
-        female_label.setFixedWidth(40)
-        female_row.addWidget(female_label)
-        for val in male_values:
-            pct_label = QLabel(f"{100 - val}%")
-            pct_label.setStyleSheet("color: #b0b0b0; font-size: 11px;")
-            pct_label.setFixedWidth(24)
-            pct_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            female_row.addWidget(pct_label)
-        female_row.addStretch()
-        
-        # ラジオボタン行を追加（ヘッダーの下）
-        ratio_with_label = QHBoxLayout()
-        ratio_with_label.setSpacing(8)
-        ratio_with_label.addSpacing(40)  # "男性"ラベル分のスペース
-        for btn in self.ratio_buttons:
-            ratio_with_label.addWidget(btn)
-        ratio_with_label.addStretch()
-        
-        ratio_layout.addLayout(ratio_with_label)
-        ratio_layout.addLayout(male_row)
-        ratio_layout.addLayout(female_row)
-        
-        self.selected_ratio = 50  # デフォルト値
-        
-        # 出力形式（ラジオボタン形式）
-        output_label = QLabel("出力形式:")
-        output_label.setStyleSheet(label_style)
-        
-        output_layout = QHBoxLayout()
-        output_layout.setSpacing(15)
-        
-        self.radio_xlsx_btn = QPushButton("●")
-        self.radio_xlsx_btn.setFixedSize(24, 24)
-        self.radio_xlsx_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.radio_xlsx_btn.setStyleSheet("background: transparent; color: #4a90d9; border: none; font-size: 18px;")
-        self.radio_xlsx_btn.clicked.connect(lambda: self._select_output_format("xlsx"))
-        
-        xlsx_label = QLabel("Excel (.xlsx)")
-        xlsx_label.setStyleSheet("color: #ffffff; font-size: 13px;")
-        
-        self.radio_csv_btn = QPushButton("○")
-        self.radio_csv_btn.setFixedSize(24, 24)
-        self.radio_csv_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.radio_csv_btn.setStyleSheet("background: transparent; color: #606060; border: none; font-size: 18px;")
-        self.radio_csv_btn.clicked.connect(lambda: self._select_output_format("csv"))
-        
-        csv_label = QLabel("CSV (.csv)")
-        csv_label.setStyleSheet("color: #ffffff; font-size: 13px;")
-        
-        output_layout.addWidget(self.radio_xlsx_btn)
-        output_layout.addWidget(xlsx_label)
-        output_layout.addSpacing(20)
-        output_layout.addWidget(self.radio_csv_btn)
-        output_layout.addWidget(csv_label)
-        output_layout.addStretch()
-        
-        self.selected_output_format = "xlsx"  # デフォルト値
-        
-        gen_layout.addWidget(count_label, 0, 0)
-        gen_layout.addWidget(self.gen_count, 0, 1)
-        gen_layout.addWidget(age_label, 1, 0)
-        gen_layout.addLayout(age_layout_h, 1, 1)
-        gen_layout.addWidget(ratio_label, 2, 0, Qt.AlignmentFlag.AlignTop)
-        gen_layout.addLayout(ratio_layout, 2, 1)
-        gen_layout.addWidget(output_label, 3, 0)
-        gen_layout.addLayout(output_layout, 3, 1)
-        
-        scroll_layout.addWidget(gen_group)
-        
-        scroll_layout.addStretch()
-        scroll.setWidget(scroll_content)
-        layout.addWidget(scroll)
+        layout.addWidget(pref_group, 1)
         
         # ===== Generateボタン =====
         gen_btn_layout = QHBoxLayout()
@@ -5585,7 +5614,6 @@ class ToolsPage(QWidget):
                 border-radius: 6px; padding: 12px 40px; font-size: 14px; font-weight: bold; }
             QPushButton:hover { background-color: #2ecc71; }
         """)
-        gen_btn_layout.addStretch()
         gen_btn_layout.addWidget(generate_btn)
         gen_btn_layout.addStretch()
         layout.addLayout(gen_btn_layout)
@@ -5743,17 +5771,24 @@ class ToolsPage(QWidget):
             max_age = self.age_max.value()
             male_ratio = self.selected_ratio  # ラジオボタンから取得
             
-            # 選択された都道府県
-            selected_prefs = [chk.text() for chk in self.pref_checkboxes if chk.isChecked()]
-            if not selected_prefs:
-                self.toast.show_toast("都道府県を1つ以上選択してください", "error")
-                return
-            
-            # 郵便番号データが読み込まれているか確認
-            available_prefs = [p for p in selected_prefs if p in self.postal_data and len(self.postal_data[p]) > 0]
-            if not available_prefs:
-                self.toast.show_toast("郵便番号データが見つかりません。data/postal_codes/フォルダを確認してください", "error")
-                return
+            # 住所が選択されている場合のみ都道府県チェック
+            available_prefs = []
+            if self.chk_address.isChecked():
+                # 選択された都道府県
+                selected_prefs = [chk.text() for chk in self.pref_checkboxes if chk.isChecked()]
+                if not selected_prefs:
+                    self.toast.show_toast("都道府県を1つ以上選択してください", "error")
+                    return
+                
+                # 郵便番号データを取得（キャッシュまたはGitHubからダウンロード）
+                self.toast.show_toast(f"郵便番号データを準備中...", "info")
+                QApplication.processEvents()  # UIを更新
+                
+                available_prefs = self._get_postal_data(selected_prefs)
+                
+                if not available_prefs:
+                    self.toast.show_toast("郵便番号データの取得に失敗しました。インターネット接続を確認してください", "error")
+                    return
             
             # フォーマット
             phone_fmt = self.phone_format.currentData()
@@ -5856,9 +5891,13 @@ class ToolsPage(QWidget):
                 
                 # === 電話番号 ===
                 if self.chk_phone.isChecked():
-                    phone = fake.phone_number()
-                    if phone_fmt == "none":
-                        phone = phone.replace("-", "")
+                    # 090/080/070のいずれかで始まる11桁の電話番号を生成
+                    prefix = random.choice(["090", "080", "070"])
+                    remaining = ''.join([str(random.randint(0, 9)) for _ in range(8)])
+                    if phone_fmt == "hyphen":
+                        phone = f"{prefix}-{remaining[:4]}-{remaining[4:]}"
+                    else:  # none
+                        phone = f"{prefix}{remaining}"
                     row["電話番号"] = phone
                 
                 # === 性別 ===
@@ -5948,6 +5987,178 @@ class ToolsPage(QWidget):
                 
         except ImportError as e:
             self.toast.show_toast(f"必要なライブラリがありません: {e}", "error")
+        except Exception as e:
+            self.toast.show_toast(f"生成エラー: {e}", "error")
+            import traceback
+            traceback.print_exc()
+    
+    def _create_password_tab(self):
+        """パスワード生成タブを作成"""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        
+        # スクロールエリア
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background-color: transparent; }")
+        
+        scroll_content = QWidget()
+        scroll_layout = QVBoxLayout(scroll_content)
+        scroll_layout.setSpacing(20)
+        
+        label_style = "color: #b0b0b0; font-size: 13px;"
+        
+        spinbox_style = """
+            QSpinBox { background-color: #2a2a3a; border: 1px solid #404050; border-radius: 6px;
+                padding: 8px 12px; color: #ffffff; font-size: 13px; min-width: 70px; max-width: 70px; }
+            QSpinBox:focus { border-color: #4a90d9; }
+            QSpinBox::up-button, QSpinBox::down-button { width: 20px; }
+        """
+        
+        # ===== 文字種の選択 =====
+        char_group = QGroupBox("Character Types")
+        char_group.setStyleSheet("""
+            QGroupBox { font-size: 14px; font-weight: bold; color: #b0b0b0;
+                border: 1px solid #404050; border-radius: 10px; margin-top: 10px; padding: 15px 10px 15px 10px; }
+            QGroupBox::title { subcontrol-origin: margin; left: 15px; padding: 0 5px; }
+        """)
+        char_layout = QHBoxLayout(char_group)
+        char_layout.setSpacing(20)
+        char_layout.setContentsMargins(10, 10, 10, 10)
+        
+        self.chk_uppercase = TextCheckmarkCheckBox("英字(大文字)")
+        char_layout.addWidget(self.chk_uppercase)
+        
+        self.chk_lowercase = TextCheckmarkCheckBox("英字(小文字)")
+        char_layout.addWidget(self.chk_lowercase)
+        
+        self.chk_numbers = TextCheckmarkCheckBox("数字")
+        char_layout.addWidget(self.chk_numbers)
+        
+        self.chk_symbols = TextCheckmarkCheckBox("記号")
+        char_layout.addWidget(self.chk_symbols)
+        
+        char_layout.addStretch()
+        scroll_layout.addWidget(char_group)
+        
+        # ===== 生成設定 =====
+        gen_group = QGroupBox("Generation Settings")
+        gen_group.setStyleSheet("""
+            QGroupBox { font-size: 14px; font-weight: bold; color: #b0b0b0;
+                border: 1px solid #404050; border-radius: 10px; margin-top: 10px; padding: 15px 10px 15px 10px; }
+            QGroupBox::title { subcontrol-origin: margin; left: 15px; padding: 0 5px; }
+        """)
+        gen_layout = QVBoxLayout(gen_group)
+        gen_layout.setSpacing(15)
+        gen_layout.setContentsMargins(10, 10, 10, 10)
+        
+        # 文字数
+        length_row = QHBoxLayout()
+        length_label = QLabel("文字数:")
+        length_label.setStyleSheet(label_style)
+        length_label.setFixedWidth(60)
+        self.pw_length = QSpinBox()
+        self.pw_length.setRange(4, 128)
+        self.pw_length.setValue(10)
+        self.pw_length.setStyleSheet(spinbox_style)
+        length_row.addWidget(length_label)
+        length_row.addWidget(self.pw_length)
+        length_row.addStretch()
+        gen_layout.addLayout(length_row)
+        
+        # 作成数
+        count_row = QHBoxLayout()
+        count_label = QLabel("作成数:")
+        count_label.setStyleSheet(label_style)
+        count_label.setFixedWidth(60)
+        self.pw_count = QSpinBox()
+        self.pw_count.setRange(1, 10000)
+        self.pw_count.setValue(10)
+        self.pw_count.setStyleSheet(spinbox_style)
+        count_row.addWidget(count_label)
+        count_row.addWidget(self.pw_count)
+        count_row.addStretch()
+        gen_layout.addLayout(count_row)
+        
+        scroll_layout.addWidget(gen_group)
+        
+        # ===== Generateボタン（Generation Settingsのすぐ下）=====
+        gen_btn_layout = QHBoxLayout()
+        generate_btn = QPushButton("Generate")
+        generate_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        generate_btn.clicked.connect(self._generate_passwords)
+        generate_btn.setStyleSheet("""
+            QPushButton { background-color: #27ae60; color: white; border: none;
+                border-radius: 6px; padding: 12px 40px; font-size: 14px; font-weight: bold; }
+            QPushButton:hover { background-color: #2ecc71; }
+        """)
+        gen_btn_layout.addWidget(generate_btn)
+        gen_btn_layout.addStretch()
+        scroll_layout.addLayout(gen_btn_layout)
+        
+        scroll_layout.addStretch()
+        scroll.setWidget(scroll_content)
+        layout.addWidget(scroll)
+        
+        return widget
+    
+    def _generate_passwords(self):
+        """パスワードを生成"""
+        import random
+        import string
+        from datetime import datetime
+        
+        try:
+            # 文字種を取得
+            chars = ""
+            if self.chk_uppercase.isChecked():
+                chars += string.ascii_uppercase
+            if self.chk_lowercase.isChecked():
+                chars += string.ascii_lowercase
+            if self.chk_numbers.isChecked():
+                chars += string.digits
+            if self.chk_symbols.isChecked():
+                chars += "!@#$%^&*()_+-=[]{}|;:,.<>?"
+            
+            if not chars:
+                self.toast.show_toast("文字種を1つ以上選択してください", "error")
+                return
+            
+            # 設定取得
+            length = self.pw_length.value()
+            count = self.pw_count.value()
+            
+            # パスワード生成
+            passwords = []
+            for _ in range(count):
+                pw = ''.join(random.choice(chars) for _ in range(length))
+                passwords.append(pw)
+            
+            # 出力ディレクトリ
+            if getattr(sys, 'frozen', False):
+                base_dir = os.path.dirname(sys.executable)
+            else:
+                base_dir = os.path.dirname(os.path.abspath(__file__))
+            export_dir = os.path.join(base_dir, "_internal", "Export", "PasswordGenerator")
+            
+            os.makedirs(export_dir, exist_ok=True)
+            
+            # ファイル名（タイムスタンプ付き）
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filepath = os.path.join(export_dir, f"passwords_{timestamp}.txt")
+            
+            with open(filepath, 'w', encoding='utf-8') as f:
+                for pw in passwords:
+                    f.write(pw + '\n')
+            
+            self.toast.show_toast(f"生成完了: {count}件", "success")
+            
+            # フォルダを開く
+            if os.path.exists(export_dir):
+                os.startfile(export_dir)
+                
         except Exception as e:
             self.toast.show_toast(f"生成エラー: {e}", "error")
             import traceback
@@ -6647,8 +6858,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Project WIN")
-        self.setMinimumSize(1000, 700)
-        self.resize(1200, 800)  # デフォルトサイズ
+        self.setMinimumSize(1200, 800)
+        self.resize(1320, 820)  # デフォルトサイズ
         # タイトルバーを非表示にしてフレームレスに（UpdateDialogと同じ）
         self.setWindowFlags(Qt.WindowType.FramelessWindowHint)
         # 角を丸くするために背景を透明に
