@@ -5427,6 +5427,24 @@ class ToolsPage(QWidget):
         address_row.setSpacing(15)
         self.chk_address = TextCheckmarkCheckBox("住所")
         address_row.addWidget(self.chk_address)
+        
+        # 市区町村フィルター
+        city_filter_label = QLabel("詳細設定:")
+        city_filter_label.setStyleSheet("color: #b0b0b0; font-size: 12px;")
+        address_row.addWidget(city_filter_label)
+        
+        self.city_filter = QLineEdit()
+        self.city_filter.setPlaceholderText("例: 渋谷区、大阪市（任意）")
+        self.city_filter.setStyleSheet("""
+            QLineEdit {
+                background-color: #3a3a4a; border: 1px solid #404050; border-radius: 4px;
+                padding: 4px 8px; color: #ffffff; font-size: 12px; min-width: 150px;
+            }
+            QLineEdit:focus { border-color: #4a90d9; }
+        """)
+        self.city_filter.setToolTip("指定した文字列を含む市区町村のみを使用（空欄で全て）")
+        address_row.addWidget(self.city_filter)
+        
         address_row.addStretch()
         info_layout.addLayout(address_row)
         
@@ -5834,6 +5852,8 @@ class ToolsPage(QWidget):
             
             # 住所が選択されている場合のみ都道府県チェック
             available_prefs = []
+            filtered_postal_data = {}  # 市区町村フィルター適用後のデータ
+            
             if self.chk_address.isChecked():
                 # 選択された都道府県
                 selected_prefs = [chk.text() for chk in self.pref_checkboxes if chk.isChecked()]
@@ -5850,6 +5870,33 @@ class ToolsPage(QWidget):
                 if not available_prefs:
                     self.toast.show_toast("郵便番号データの取得に失敗しました。インターネット接続を確認してください", "error")
                     return
+                
+                # 市区町村フィルターを取得
+                city_filter_text = self.city_filter.text().strip()
+                
+                if city_filter_text:
+                    # フィルター適用：指定した文字列を含む市区町村のみ抽出
+                    for pref in available_prefs:
+                        filtered_entries = [
+                            entry for entry in self.postal_data[pref]
+                            if city_filter_text in entry.get("city", "")
+                        ]
+                        if filtered_entries:
+                            filtered_postal_data[pref] = filtered_entries
+                    
+                    # フィルター後にデータが残っている都道府県のみ使用
+                    available_prefs = list(filtered_postal_data.keys())
+                    
+                    if not available_prefs:
+                        self.toast.show_toast(f"「{city_filter_text}」を含む市区町村が見つかりません", "error")
+                        return
+                    
+                    # フィルター後の件数を表示
+                    total_entries = sum(len(v) for v in filtered_postal_data.values())
+                    self.toast.show_toast(f"「{city_filter_text}」: {total_entries}件の住所が見つかりました", "info")
+                else:
+                    # フィルターなし：すべてのデータを使用
+                    filtered_postal_data = {pref: self.postal_data[pref] for pref in available_prefs}
             
             # フォーマット
             phone_fmt = self.phone_format.currentData()
@@ -5922,8 +5969,8 @@ class ToolsPage(QWidget):
                     # 利用可能な都道府県からランダムに選択
                     pref = random.choice(available_prefs)
                     
-                    # その都道府県の実在する郵便番号データからランダムに選択
-                    addr_entry = random.choice(self.postal_data[pref])
+                    # フィルター済みの郵便番号データからランダムに選択
+                    addr_entry = random.choice(filtered_postal_data[pref])
                     zipcode = addr_entry["zip"]
                     pref_name = addr_entry["pref"]
                     city = addr_entry["city"]
@@ -6404,6 +6451,21 @@ class ProxyPage(QWidget):
             
             row_layout.addStretch()
             
+            # チェックボタン
+            check_btn = QPushButton()
+            check_btn.setFixedSize(32, 32)
+            check_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            check_icon = get_icon_from_base64("speedometer")
+            if not check_icon.isNull():
+                check_btn.setIcon(check_icon)
+                check_btn.setIconSize(QSize(16, 16))
+            else:
+                check_btn.setText("🔍")
+            check_btn.setToolTip("Check proxies")
+            check_btn.setStyleSheet("background: transparent; border: none; font-size: 16px;")
+            check_btn.clicked.connect(lambda _, idx=i: self._check_group(idx))
+            row_layout.addWidget(check_btn)
+            
             # 編集ボタン
             edit_btn = QPushButton()
             edit_btn.setFixedSize(32, 32)
@@ -6472,6 +6534,20 @@ class ProxyPage(QWidget):
             self._save_settings()
             self._refresh_groups()
             self.toast.show_toast(f"'{title}' deleted", "success", 2000)
+    
+    def _check_group(self, index):
+        """グループのプロキシをチェック"""
+        group = self.proxy_groups[index]
+        title = group["title"]
+        proxies = group.get("proxies", [])
+        
+        if not proxies:
+            self.toast.show_toast("No proxies in this group", "error")
+            return
+        
+        # ProxyCheckerダイアログを表示
+        dialog = ProxyCheckerDialog(title, proxies, self)
+        dialog.show()
     
     def _save_settings(self):
         """設定を保存"""
@@ -6736,6 +6812,776 @@ class UpdateDialog(QDialog):
     
     def mouseReleaseEvent(self, event):
         self._drag_pos = None
+
+
+class ProxyCheckerDialog(QDialog):
+    """プロキシチェッカーダイアログ"""
+    
+    TEST_SITES = {
+        "Google": "http://www.google.com",
+        "Amazon": "https://www.amazon.co.jp/",
+        "Custom": ""
+    }
+    
+    def __init__(self, group_name, proxies, parent=None):
+        super().__init__(parent)
+        self.group_name = group_name
+        self.proxies = proxies
+        self.check_threads = []
+        self.results = {}
+        self.is_checking = False
+        self.proxy_checkboxes = []
+        
+        self.setWindowTitle(f"Proxy Checker - {group_name}")
+        self.setMinimumSize(800, 550)
+        self.setWindowFlags(Qt.WindowType.Window)
+        self._setup_ui()
+    
+    def _setup_ui(self):
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #1e1e2e;
+            }
+            QTableWidget {
+                background-color: #1e1e2e;
+                border: none;
+                color: #ffffff;
+                outline: none;
+                selection-background-color: transparent;
+                gridline-color: transparent;
+            }
+            QTableWidget::item {
+                padding: 0px;
+                margin: 0px;
+                border: none;
+                outline: none;
+            }
+            QTableWidget::item:selected {
+                background-color: transparent;
+                border: none;
+            }
+            QHeaderView::section {
+                background-color: #1e1e2e;
+                color: #808080;
+                padding: 10px;
+                border: none;
+                border-bottom: 1px solid #303040;
+                font-weight: bold;
+                font-size: 12px;
+            }
+            QScrollBar:vertical {
+                background: #252535;
+                width: 10px;
+                border-radius: 5px;
+            }
+            QScrollBar::handle:vertical {
+                background: #404050;
+                border-radius: 5px;
+                min-height: 30px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0;
+            }
+            QComboBox {
+                background-color: #3a3a4a;
+                border: 1px solid #404050;
+                border-radius: 4px;
+                padding: 6px 12px;
+                color: #ffffff;
+                font-size: 12px;
+                min-width: 120px;
+            }
+            QComboBox:hover { border-color: #4a90d9; }
+            QComboBox::drop-down {
+                border: none;
+                width: 20px;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border-left: 5px solid transparent;
+                border-right: 5px solid transparent;
+                border-top: 6px solid #b0b0b0;
+                margin-right: 8px;
+            }
+            QComboBox QAbstractItemView {
+                background-color: #2a2a3a;
+                border: 1px solid #404050;
+                color: #ffffff;
+                selection-background-color: #3a3a4a;
+            }
+            QLineEdit {
+                background-color: #3a3a4a;
+                border: 1px solid #404050;
+                border-radius: 4px;
+                padding: 6px 12px;
+                color: #ffffff;
+                font-size: 12px;
+            }
+            QLineEdit:focus { border-color: #4a90d9; }
+            QCheckBox {
+                color: #ffffff;
+                spacing: 6px;
+                background: transparent;
+            }
+            QCheckBox::indicator {
+                width: 14px;
+                height: 14px;
+                border-radius: 3px;
+                border: 2px solid #404050;
+                background-color: #252535;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #4a90d9;
+                border-color: #4a90d9;
+            }
+            QLabel {
+                background: transparent;
+            }
+        """)
+        
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
+        
+        # ヘッダー
+        header_layout = QHBoxLayout()
+        
+        # タイトルアイコン
+        title_icon_label = QLabel()
+        speedometer_icon = get_icon_from_base64("speedometer")
+        if not speedometer_icon.isNull():
+            title_icon_label.setPixmap(speedometer_icon.pixmap(20, 20))
+        else:
+            title_icon_label.setText("🔍")
+        title_icon_label.setStyleSheet("background: transparent;")
+        header_layout.addWidget(title_icon_label)
+        
+        title = QLabel(f"{self.group_name} ({len(self.proxies)} proxies)")
+        title.setStyleSheet("font-size: 18px; font-weight: bold; color: #ffffff;")
+        header_layout.addWidget(title)
+        
+        header_layout.addStretch()
+        
+        # Test Site選択
+        site_label = QLabel("Test site:")
+        site_label.setStyleSheet("color: #b0b0b0; font-size: 12px; background: transparent;")
+        header_layout.addWidget(site_label)
+        
+        self.site_combo = QComboBox()
+        self.site_combo.addItems(["Google", "Amazon", "Custom"])
+        self.site_combo.currentTextChanged.connect(self._on_site_changed)
+        header_layout.addWidget(self.site_combo)
+        
+        # Custom URL入力
+        self.custom_url = QLineEdit()
+        self.custom_url.setPlaceholderText("https://example.com")
+        self.custom_url.setFixedWidth(200)
+        self.custom_url.setVisible(False)
+        header_layout.addWidget(self.custom_url)
+        
+        layout.addLayout(header_layout)
+        
+        # テーブル
+        self.table = QTableWidget()
+        self.table.setColumnCount(5)
+        self.table.setShowGrid(False)
+        self.table.setMouseTracking(True)
+        self.table.viewport().setMouseTracking(True)
+        
+        # マスターチェックボックス
+        self.master_checkbox = QCheckBox()
+        self.master_checkbox.setChecked(True)
+        self.master_checkbox.setStyleSheet("""
+            QCheckBox {
+                background: transparent;
+            }
+            QCheckBox::indicator {
+                width: 14px;
+                height: 14px;
+                border-radius: 3px;
+                border: 2px solid #404050;
+                background-color: #252535;
+            }
+            QCheckBox::indicator:checked {
+                background-color: #4a90d9;
+                border-color: #4a90d9;
+            }
+        """)
+        self.master_checkbox.stateChanged.connect(self._on_master_checkbox_changed)
+        
+        # ヘッダーラベル設定
+        self.table.setHorizontalHeaderLabels(["", "Proxy", "Status", "Speed", "Location"])
+        
+        # ヘッダーの最初の列にマスターチェックボックスを配置
+        header_checkbox_widget = QWidget()
+        header_checkbox_layout = QHBoxLayout(header_checkbox_widget)
+        header_checkbox_layout.setContentsMargins(0, 0, 0, 0)
+        header_checkbox_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        header_checkbox_layout.addWidget(self.master_checkbox)
+        self.table.horizontalHeader().setMinimumSectionSize(50)
+        
+        self.table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Fixed)
+        self.table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Fixed)
+        self.table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Fixed)
+        self.table.setColumnWidth(0, 50)
+        self.table.setColumnWidth(2, 100)
+        self.table.setColumnWidth(3, 100)
+        self.table.setColumnWidth(4, 150)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setSelectionMode(QTableWidget.SelectionMode.NoSelection)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.verticalHeader().setVisible(False)
+        
+        # 行ホバー用の変数
+        self.hovered_row = -1
+        
+        # チェックボックスリストを初期化
+        self.proxy_checkboxes = [None] * len(self.proxies)
+        self.proxy_checked = [True] * len(self.proxies)
+        
+        # 行数を設定
+        self.table.setRowCount(len(self.proxies))
+        for i in range(len(self.proxies)):
+            self.table.setRowHeight(i, 45)
+        
+        # バッチ処理用の変数
+        self._batch_index = 0
+        self._batch_size = 50  # 一度に作成する行数
+        
+        # テーブルのヘッダーを非表示にし、カスタムヘッダーを作成
+        self.table.horizontalHeader().setVisible(False)
+        
+        # カスタムヘッダー行
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 5)
+        header_row.setSpacing(0)
+        
+        # マスターチェックボックス（50px幅に合わせる）
+        master_cb_container = QWidget()
+        master_cb_container.setFixedWidth(50)
+        master_cb_container.setStyleSheet("background: transparent;")
+        master_cb_layout = QHBoxLayout(master_cb_container)
+        master_cb_layout.setContentsMargins(0, 0, 0, 0)
+        master_cb_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        master_cb_layout.addWidget(self.master_checkbox)
+        header_row.addWidget(master_cb_container)
+        
+        # Proxyラベル（ストレッチ）
+        proxy_label = QLabel("Proxy")
+        proxy_label.setStyleSheet("color: #808080; font-weight: bold; font-size: 12px; padding-left: 8px;")
+        header_row.addWidget(proxy_label, 1)
+        
+        # Statusラベル（100px）
+        status_label = QLabel("Status")
+        status_label.setFixedWidth(100)
+        status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        status_label.setStyleSheet("color: #808080; font-weight: bold; font-size: 12px;")
+        header_row.addWidget(status_label)
+        
+        # Speedラベル（100px）
+        speed_label = QLabel("Speed")
+        speed_label.setFixedWidth(100)
+        speed_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        speed_label.setStyleSheet("color: #808080; font-weight: bold; font-size: 12px;")
+        header_row.addWidget(speed_label)
+        
+        # Locationラベル（150px）
+        location_label = QLabel("Location")
+        location_label.setFixedWidth(150)
+        location_label.setStyleSheet("color: #808080; font-weight: bold; font-size: 12px; padding-left: 8px;")
+        header_row.addWidget(location_label)
+        
+        layout.addLayout(header_row)
+        
+        layout.addWidget(self.table)
+        
+        # プログレスバー（テーブルの下）
+        self.progress = QProgressBar()
+        self.progress.setFixedHeight(12)
+        self.progress.setStyleSheet("""
+            QProgressBar {
+                border: 1px solid #303040;
+                border-radius: 4px;
+                background-color: #252535;
+                text-align: center;
+                color: #ffffff;
+                font-size: 9px;
+            }
+            QProgressBar::chunk {
+                background-color: #27ae60;
+                border-radius: 3px;
+            }
+        """)
+        self.progress.setVisible(False)
+        layout.addWidget(self.progress)
+        
+        # フッター（統計とStart Checkボタン）
+        footer_layout = QHBoxLayout()
+        
+        self.stats_label = QLabel("Select proxies and click 'Start Check' to begin")
+        self.stats_label.setStyleSheet("color: #b0b0b0; font-size: 12px;")
+        footer_layout.addWidget(self.stats_label)
+        
+        footer_layout.addStretch()
+        
+        # チェックボタン（右下）
+        self.check_btn = QPushButton("▶ Start Check")
+        self.check_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.check_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #27ae60; color: #ffffff;
+                border: none; border-radius: 8px;
+                padding: 10px 24px; font-size: 13px; font-weight: bold;
+            }
+            QPushButton:hover { background-color: #2ecc71; }
+            QPushButton:disabled { background-color: #404050; color: #808080; }
+        """)
+        self.check_btn.clicked.connect(self._start_check)
+        footer_layout.addWidget(self.check_btn)
+        
+        layout.addLayout(footer_layout)
+        
+        # ウィンドウ表示後にバッチ処理で行を作成
+        from PySide6.QtCore import QTimer
+        self._batch_timer = QTimer()
+        self._batch_timer.timeout.connect(self._create_batch_rows)
+        self._batch_timer.start(0)  # できるだけ速く
+    
+    def _create_batch_rows(self):
+        """バッチで行を作成"""
+        end_idx = min(self._batch_index + self._batch_size, len(self.proxies))
+        
+        for i in range(self._batch_index, end_idx):
+            self._create_row(i)
+        
+        self._batch_index = end_idx
+        
+        # 全て作成完了したらタイマーを停止
+        if self._batch_index >= len(self.proxies):
+            self._batch_timer.stop()
+    
+    def _create_row(self, row_idx):
+        """単一行を作成"""
+        if self.proxy_checkboxes[row_idx] is not None:
+            return  # 既に作成済み
+        
+        proxy = self.proxies[row_idx]
+        
+        # チェックボックス（列0）
+        cb = QCheckBox()
+        cb.setChecked(self.proxy_checked[row_idx])
+        cb.stateChanged.connect(lambda state, idx=row_idx: self._on_proxy_checkbox_changed(idx, state))
+        cb_widget = QWidget()
+        cb_widget.setStyleSheet("background-color: transparent;")
+        cb_layout = QHBoxLayout(cb_widget)
+        cb_layout.setContentsMargins(0, 0, 0, 0)
+        cb_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        cb_layout.addWidget(cb)
+        cb_widget.setMouseTracking(True)
+        cb_widget.enterEvent = lambda event, r=row_idx: self._update_row_hover(r)
+        cb.setMouseTracking(True)
+        cb.enterEvent = lambda event, r=row_idx: self._update_row_hover(r)
+        self.table.setCellWidget(row_idx, 0, cb_widget)
+        
+        self.proxy_checkboxes[row_idx] = cb
+        
+        # キャッシュされた結果を確認
+        cached = self.results.get(row_idx)
+        
+        # テキストセル作成用ヘルパー
+        def create_text_cell(text, color="#ffffff", center=False):
+            widget = QWidget()
+            widget.setStyleSheet("background-color: transparent;")
+            wlayout = QHBoxLayout(widget)
+            wlayout.setContentsMargins(8, 0, 8, 0)
+            wlayout.setSpacing(0)
+            label = QLabel(text)
+            label.setStyleSheet(f"color: {color}; background-color: transparent;")
+            label.setObjectName("cell_label")
+            wlayout.addWidget(label)
+            if center:
+                wlayout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            else:
+                wlayout.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+            widget.setMouseTracking(True)
+            widget.enterEvent = lambda event, r=row_idx: self._update_row_hover(r)
+            return widget
+        
+        # Proxy（列1）
+        self.table.setCellWidget(row_idx, 1, create_text_cell(proxy))
+        
+        # Status（列2）- 中央揃え
+        if cached:
+            self.table.setCellWidget(row_idx, 2, create_text_cell(cached["status_text"], cached["status_color"], center=True))
+        else:
+            self.table.setCellWidget(row_idx, 2, create_text_cell("Waiting", "#808080", center=True))
+        
+        # Speed（列3）- 中央揃え
+        if cached:
+            self.table.setCellWidget(row_idx, 3, create_text_cell(cached["speed_text"], cached["speed_color"], center=True))
+        else:
+            self.table.setCellWidget(row_idx, 3, create_text_cell("-", "#808080", center=True))
+        
+        # Location（列4）
+        if cached:
+            self.table.setCellWidget(row_idx, 4, create_text_cell(cached["location_text"], cached["location_color"]))
+        else:
+            self.table.setCellWidget(row_idx, 4, create_text_cell("-", "#808080"))
+    
+    def _on_proxy_checkbox_changed(self, idx, state):
+        """プロキシのチェックボックス変更時"""
+        self.proxy_checked[idx] = (state == Qt.CheckState.Checked.value)
+    
+    def _update_row_hover(self, new_row):
+        """行のホバー状態を更新"""
+        if new_row == self.hovered_row:
+            return
+        
+        # 前のホバー行の背景色をリセット
+        if 0 <= self.hovered_row < self.table.rowCount():
+            self._set_row_background(self.hovered_row, "transparent")
+        
+        # 新しいホバー行の背景色を設定
+        if 0 <= new_row < self.table.rowCount():
+            self._set_row_background(new_row, "#2a2a3a")
+        
+        self.hovered_row = new_row
+    
+    def _set_row_background(self, row, color):
+        """行の背景色を設定（全てウィジェットベース）"""
+        col_count = self.table.columnCount()
+        for col in range(col_count):
+            widget = self.table.cellWidget(row, col)
+            if widget:
+                if color == "transparent":
+                    widget.setStyleSheet("background-color: transparent; border-radius: 0px;")
+                else:
+                    # 最初のセルは左側に角丸、最後のセルは右側に角丸、中間は角丸なし
+                    if col == 0:
+                        widget.setStyleSheet(f"background-color: {color}; border-top-left-radius: 6px; border-bottom-left-radius: 6px; border-top-right-radius: 0px; border-bottom-right-radius: 0px;")
+                    elif col == col_count - 1:
+                        widget.setStyleSheet(f"background-color: {color}; border-top-left-radius: 0px; border-bottom-left-radius: 0px; border-top-right-radius: 6px; border-bottom-right-radius: 6px;")
+                    else:
+                        widget.setStyleSheet(f"background-color: {color}; border-radius: 0px;")
+    
+    def _on_site_changed(self, site):
+        """テストサイト変更時"""
+        self.custom_url.setVisible(site == "Custom")
+    
+    def _on_master_checkbox_changed(self, state):
+        """マスターチェックボックス変更時"""
+        checked = state == Qt.CheckState.Checked.value
+        # 全プロキシのチェック状態を更新
+        for i in range(len(self.proxies)):
+            self.proxy_checked[i] = checked
+        # 作成済みのチェックボックスを更新
+        for cb in self.proxy_checkboxes:
+            if cb is not None:
+                cb.setChecked(checked)
+    
+    def _get_test_url(self):
+        """テストURLを取得"""
+        site = self.site_combo.currentText()
+        if site == "Custom":
+            url = self.custom_url.text().strip()
+            if not url:
+                return None
+            if not url.startswith("http"):
+                url = "https://" + url
+            return url
+        return self.TEST_SITES.get(site, "http://www.google.com")
+    
+    def _start_check(self):
+        """プロキシチェックを開始"""
+        if self.is_checking:
+            return
+        
+        # テストURL確認
+        test_url = self._get_test_url()
+        if not test_url:
+            return
+        
+        # 選択されたプロキシを取得（proxy_checkedリストを使用）
+        selected_proxies = []
+        selected_indices = []
+        for i in range(len(self.proxies)):
+            if self.proxy_checked[i]:
+                selected_proxies.append(self.proxies[i])
+                selected_indices.append(i)
+        
+        if not selected_proxies:
+            self.stats_label.setText("⚠ No proxies selected")
+            self.stats_label.setStyleSheet("color: #e74c3c; font-size: 12px;")
+            return
+        
+        self.is_checking = True
+        self.check_btn.setEnabled(False)
+        self.check_btn.setText("Checking...")
+        self.progress.setVisible(True)
+        self.progress.setMaximum(len(selected_proxies))
+        self.progress.setValue(0)
+        self.results = {}
+        self.check_threads = []
+        
+        # ステータスをリセット（ウィジェットベース）- 行が作成済みの場合のみ
+        for i in selected_indices:
+            if self.proxy_checkboxes[i] is not None:
+                self._update_cell_text(i, 2, "Checking...", "#f39c12")
+                self._update_cell_text(i, 3, "-", "#808080")
+                self._update_cell_text(i, 4, "-", "#808080")
+        
+        # 各プロキシをチェック（スレッドで実行）
+        self.completed_count = 0
+        self.total_to_check = len(selected_proxies)
+        
+        for i, proxy in zip(selected_indices, selected_proxies):
+            thread = ProxyCheckThread(proxy, i, test_url)
+            thread.result_ready.connect(self._on_result)
+            thread.start()
+            self.check_threads.append(thread)
+    
+    def _update_cell_text(self, row, col, text, color="#ffffff"):
+        """セルのテキストを更新（ウィジェットベース）"""
+        widget = self.table.cellWidget(row, col)
+        if widget:
+            label = widget.findChild(QLabel, "cell_label")
+            if label:
+                label.setText(text)
+                label.setStyleSheet(f"color: {color}; background-color: transparent;")
+    
+    def _on_result(self, index, proxy, success, speed_ms, location, error):
+        """チェック結果を受信"""
+        self.completed_count += 1
+        self.progress.setValue(self.completed_count)
+        
+        # テーブルを更新（ウィジェットベース）
+        if success:
+            status_text = "✓ OK"
+            status_color = "#27ae60"
+            
+            if speed_ms < 500:
+                speed_text = f"{speed_ms}ms"
+                speed_color = "#27ae60"  # 緑（高速）
+            elif speed_ms < 1500:
+                speed_text = f"{speed_ms}ms"
+                speed_color = "#f39c12"  # 黄（普通）
+            else:
+                speed_text = f"{speed_ms}ms"
+                speed_color = "#e74c3c"  # 赤（遅い）
+            
+            location_text = location if location else "OK"
+            location_color = "#808080"
+        else:
+            status_text = "✗ Failed"
+            status_color = "#e74c3c"
+            speed_text = "-"
+            speed_color = "#808080"
+            location_text = error[:25] if error else "Connection failed"
+            location_color = "#e74c3c"
+        
+        # 結果をキャッシュ（行が後から作成されたときに使用）
+        self.results[index] = {
+            "proxy": proxy, 
+            "success": success, 
+            "speed": speed_ms, 
+            "location": location,
+            "status_text": status_text,
+            "status_color": status_color,
+            "speed_text": speed_text,
+            "speed_color": speed_color,
+            "location_text": location_text,
+            "location_color": location_color
+        }
+        
+        # 行が作成済みならUIを更新
+        if self.proxy_checkboxes[index] is not None:
+            self._update_cell_text(index, 2, status_text, status_color)
+            self._update_cell_text(index, 3, speed_text, speed_color)
+            self._update_cell_text(index, 4, location_text, location_color)
+        
+        # 全て完了したら統計を表示
+        if self.completed_count >= self.total_to_check:
+            self._show_stats()
+    
+    def _show_stats(self):
+        """統計を表示"""
+        self.is_checking = False
+        self.check_btn.setEnabled(True)
+        self.check_btn.setText("▶ Recheck")
+        
+        working = sum(1 for r in self.results.values() if r.get("success", False))
+        failed = len(self.results) - working
+        
+        speeds = [r["speed"] for r in self.results.values() if r.get("success", False) and r.get("speed", 0) > 0]
+        avg_speed = int(sum(speeds) / len(speeds)) if speeds else 0
+        
+        self.stats_label.setText(
+            f"✓ Working: {working}  |  ✗ Failed: {failed}  |  ⚡ Avg Speed: {avg_speed}ms"
+        )
+        self.stats_label.setStyleSheet("color: #ffffff; font-size: 13px; font-weight: bold;")
+    
+    def closeEvent(self, event):
+        """ウィンドウを閉じる時にスレッドを停止"""
+        # バッチタイマーを停止
+        if hasattr(self, '_batch_timer'):
+            self._batch_timer.stop()
+        for thread in self.check_threads:
+            if thread.isRunning():
+                thread.terminate()
+                thread.wait()
+        event.accept()
+
+
+class ProxyCheckThread(QThread):
+    """プロキシをチェックするスレッド"""
+    result_ready = Signal(int, str, bool, int, str, str)  # index, proxy, success, speed_ms, location, error
+    
+    def __init__(self, proxy, index, test_url="http://www.google.com"):
+        super().__init__()
+        self.proxy = proxy
+        self.index = index
+        self.test_url = test_url
+    
+    def run(self):
+        import time
+        
+        try:
+            # requestsを使用（より信頼性が高い）
+            import requests
+            from requests.auth import HTTPProxyAuth
+            
+            proxy_str = self.proxy.strip()
+            
+            # プロキシ形式をパース
+            proxy_url = None
+            auth = None
+            
+            if '@' in proxy_str:
+                # user:pass@host:port 形式
+                auth_part, host_part = proxy_str.rsplit('@', 1)
+                if ':' in auth_part:
+                    user, password = auth_part.split(':', 1)
+                    proxy_url = f"http://{host_part}"
+                    auth = HTTPProxyAuth(user, password)
+                else:
+                    proxy_url = f"http://{proxy_str}"
+            elif proxy_str.count(':') >= 3:
+                # host:port:user:pass 形式
+                parts = proxy_str.split(':')
+                host = parts[0]
+                port = parts[1]
+                user = parts[2]
+                password = ':'.join(parts[3:])
+                proxy_url = f"http://{host}:{port}"
+                auth = HTTPProxyAuth(user, password)
+            else:
+                # host:port 形式
+                proxy_url = f"http://{proxy_str}"
+            
+            proxies = {
+                'http': proxy_url,
+                'https': proxy_url
+            }
+            
+            # タイムアウト設定
+            start_time = time.time()
+            
+            # テストリクエスト
+            response = requests.get(
+                self.test_url,
+                proxies=proxies,
+                auth=auth,
+                timeout=15,
+                headers={"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+            )
+            
+            elapsed_ms = int((time.time() - start_time) * 1000)
+            
+            if response.status_code == 200:
+                # ロケーション情報を取得（オプション）
+                location = ""
+                try:
+                    loc_response = requests.get(
+                        "http://ip-api.com/json/?fields=country,city",
+                        proxies=proxies,
+                        auth=auth,
+                        timeout=5
+                    )
+                    if loc_response.status_code == 200:
+                        import json
+                        info = loc_response.json()
+                        city = info.get('city', '')
+                        country = info.get('country', '')
+                        if city or country:
+                            location = f"{city}, {country}".strip(", ")
+                except:
+                    pass
+                
+                self.result_ready.emit(self.index, self.proxy, True, elapsed_ms, location, "")
+            else:
+                self.result_ready.emit(self.index, self.proxy, False, 0, "", f"HTTP {response.status_code}")
+                
+        except requests.exceptions.ProxyError as e:
+            self.result_ready.emit(self.index, self.proxy, False, 0, "", "Proxy error")
+        except requests.exceptions.ConnectTimeout:
+            self.result_ready.emit(self.index, self.proxy, False, 0, "", "Connection timeout")
+        except requests.exceptions.ReadTimeout:
+            self.result_ready.emit(self.index, self.proxy, False, 0, "", "Read timeout")
+        except requests.exceptions.ConnectionError:
+            self.result_ready.emit(self.index, self.proxy, False, 0, "", "Connection failed")
+        except ImportError:
+            # requestsがない場合はurllibにフォールバック
+            self._fallback_urllib()
+        except Exception as e:
+            error_msg = str(e)[:30]
+            self.result_ready.emit(self.index, self.proxy, False, 0, "", error_msg)
+    
+    def _fallback_urllib(self):
+        """requestsがない場合のフォールバック"""
+        import urllib.request
+        import time
+        
+        try:
+            proxy_str = self.proxy.strip()
+            
+            if '@' in proxy_str:
+                auth_part, host_part = proxy_str.rsplit('@', 1)
+                proxy_url = f"http://{auth_part}@{host_part}"
+            elif proxy_str.count(':') >= 3:
+                parts = proxy_str.split(':')
+                host = parts[0]
+                port = parts[1]
+                user = parts[2]
+                password = ':'.join(parts[3:])
+                proxy_url = f"http://{user}:{password}@{host}:{port}"
+            else:
+                proxy_url = f"http://{proxy_str}"
+            
+            proxy_handler = urllib.request.ProxyHandler({
+                'http': proxy_url,
+                'https': proxy_url
+            })
+            opener = urllib.request.build_opener(proxy_handler)
+            
+            start_time = time.time()
+            
+            req = urllib.request.Request(
+                self.test_url,
+                headers={"User-Agent": "Mozilla/5.0"}
+            )
+            
+            with opener.open(req, timeout=15) as response:
+                elapsed_ms = int((time.time() - start_time) * 1000)
+                if response.status == 200:
+                    self.result_ready.emit(self.index, self.proxy, True, elapsed_ms, "", "")
+                else:
+                    self.result_ready.emit(self.index, self.proxy, False, 0, "", f"HTTP {response.status}")
+                    
+        except Exception as e:
+            error_msg = str(e)[:30]
+            self.result_ready.emit(self.index, self.proxy, False, 0, "", error_msg)
 
 
 class LicenseDialog(QDialog):
