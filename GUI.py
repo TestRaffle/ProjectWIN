@@ -1033,6 +1033,8 @@ class BotWorker(QThread):
             if hasattr(self.bot_instance, '_closing_intentionally'):
                 self.bot_instance._closing_intentionally = True
             
+            print("Stop requested - killing browser process...")
+            
             # ブラウザプロセスを直接killする（スレッドセーフ）
             try:
                 import subprocess
@@ -1061,32 +1063,40 @@ class BotWorker(QThread):
                     # Windowsの場合はtaskkillを使用
                     if os.name == 'nt':
                         try:
-                            # CREATE_NO_WINDOWフラグを使用してコンソールなしで実行
+                            # /T で子プロセスも終了、/F で強制終了
+                            # コンソールなし起動でもハングしないようにする
                             startupinfo = subprocess.STARTUPINFO()
                             startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
                             startupinfo.wShowWindow = subprocess.SW_HIDE
                             
-                            subprocess.Popen(
-                                ['taskkill', '/F', '/T', '/PID', str(browser_pid)],
-                                startupinfo=startupinfo,
+                            subprocess.run(
+                                ['taskkill', '/F', '/T', '/PID', str(browser_pid)], 
                                 stdout=subprocess.DEVNULL,
-                                stderr=subprocess.DEVNULL
+                                stderr=subprocess.DEVNULL,
+                                startupinfo=startupinfo,
+                                creationflags=subprocess.CREATE_NO_WINDOW,
+                                timeout=5
                             )
-                        except:
-                            pass
+                            print(f"Browser process killed (PID: {browser_pid})")
+                        except Exception as e:
+                            print(f"taskkill failed: {e}")
                     else:
                         # Linux/Macの場合
                         try:
                             import signal
                             os.killpg(os.getpgid(browser_pid), signal.SIGKILL)
+                            print(f"Browser process killed (PID: {browser_pid})")
                         except:
                             try:
                                 os.kill(browser_pid, signal.SIGKILL)
-                            except:
-                                pass
+                                print(f"Browser process killed (PID: {browser_pid})")
+                            except Exception as e:
+                                print(f"kill failed: {e}")
+                else:
+                    print("Browser PID not found, setting flags only")
                     
-            except:
-                pass
+            except Exception as e:
+                print(f"Error in stop: {e}")
         
         # スレッドを強制終了し、結果を設定
         try:
@@ -1094,15 +1104,25 @@ class BotWorker(QThread):
             self.wait(500)  # 500ms待機
             
             if self.isRunning():
+                print("Force terminating worker thread...")
                 self.terminate()  # スレッドを強制終了
-                self.wait(3000)  # 最大3秒待機
+                
+                # 最大3秒待機して終了を確認
+                terminated = self.wait(3000)
+                
+                if not terminated and self.isRunning():
+                    print("Warning: Thread still running after terminate")
+                else:
+                    print("Thread terminated successfully")
                 
             # シグナルを発行してUIを更新
             if not hasattr(self, '_signals_emitted'):
                 self._signals_emitted = True
                 self.result_changed.emit(self.row, "Stopped")
                 self.finished_task.emit(self.row)
-        except:
+                print("Task stopped and cleaned up")
+        except Exception as e:
+            print(f"Error terminating thread: {e}")
             # エラーが発生しても確実にシグナルを発行
             if not hasattr(self, '_signals_emitted'):
                 self._signals_emitted = True
