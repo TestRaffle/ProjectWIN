@@ -1033,8 +1033,6 @@ class BotWorker(QThread):
             if hasattr(self.bot_instance, '_closing_intentionally'):
                 self.bot_instance._closing_intentionally = True
             
-            print("Stop requested - killing browser process...")
-            
             # ブラウザプロセスを直接killする（スレッドセーフ）
             try:
                 import subprocess
@@ -1049,7 +1047,6 @@ class BotWorker(QThread):
                 # 方法2: Playwrightの内部からPIDを取得
                 if not browser_pid and hasattr(self.bot_instance, 'browser') and self.bot_instance.browser:
                     try:
-                        # 複数の取得方法を試す
                         browser = self.bot_instance.browser
                         if hasattr(browser, '_impl_obj'):
                             impl = browser._impl_obj
@@ -1064,29 +1061,32 @@ class BotWorker(QThread):
                     # Windowsの場合はtaskkillを使用
                     if os.name == 'nt':
                         try:
-                            # /T で子プロセスも終了、/F で強制終了
-                            subprocess.run(['taskkill', '/F', '/T', '/PID', str(browser_pid)], 
-                                          capture_output=True, timeout=5)
-                            print(f"Browser process killed (PID: {browser_pid})")
-                        except Exception as e:
-                            print(f"taskkill failed: {e}")
+                            # CREATE_NO_WINDOWフラグを使用してコンソールなしで実行
+                            startupinfo = subprocess.STARTUPINFO()
+                            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                            startupinfo.wShowWindow = subprocess.SW_HIDE
+                            
+                            subprocess.Popen(
+                                ['taskkill', '/F', '/T', '/PID', str(browser_pid)],
+                                startupinfo=startupinfo,
+                                stdout=subprocess.DEVNULL,
+                                stderr=subprocess.DEVNULL
+                            )
+                        except:
+                            pass
                     else:
                         # Linux/Macの場合
                         try:
                             import signal
                             os.killpg(os.getpgid(browser_pid), signal.SIGKILL)
-                            print(f"Browser process killed (PID: {browser_pid})")
                         except:
                             try:
                                 os.kill(browser_pid, signal.SIGKILL)
-                                print(f"Browser process killed (PID: {browser_pid})")
-                            except Exception as e:
-                                print(f"kill failed: {e}")
-                else:
-                    print("Browser PID not found, setting flags only")
+                            except:
+                                pass
                     
-            except Exception as e:
-                print(f"Error in stop: {e}")
+            except:
+                pass
         
         # スレッドを強制終了し、結果を設定
         try:
@@ -1094,26 +1094,15 @@ class BotWorker(QThread):
             self.wait(500)  # 500ms待機
             
             if self.isRunning():
-                print("Force terminating worker thread...")
                 self.terminate()  # スレッドを強制終了
+                self.wait(3000)  # 最大3秒待機
                 
-                # 最大3秒待機して終了を確認
-                terminated = self.wait(3000)
-                
-                if not terminated and self.isRunning():
-                    print("Warning: Thread still running after terminate")
-                else:
-                    print("Thread terminated successfully")
-                
-            # terminate()で強制終了した場合のみシグナルを発行
-            # （正常終了の場合はrun()内でシグナルが発行される）
+            # シグナルを発行してUIを更新
             if not hasattr(self, '_signals_emitted'):
                 self._signals_emitted = True
                 self.result_changed.emit(self.row, "Stopped")
                 self.finished_task.emit(self.row)
-                print("Task stopped and cleaned up")
-        except Exception as e:
-            print(f"Error terminating thread: {e}")
+        except:
             # エラーが発生しても確実にシグナルを発行
             if not hasattr(self, '_signals_emitted'):
                 self._signals_emitted = True
