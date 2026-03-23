@@ -1036,6 +1036,18 @@ class BotWorker(QThread):
         self._stopped_by_user = True
         self._stop_requested = True
         
+        import subprocess
+        import os
+        
+        # Windows用のsubprocess設定（コンソールなしでも動作）
+        startupinfo = None
+        creationflags = 0
+        if os.name == 'nt':
+            startupinfo = subprocess.STARTUPINFO()
+            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            startupinfo.wShowWindow = subprocess.SW_HIDE
+            creationflags = subprocess.CREATE_NO_WINDOW
+        
         # Bot側にもストップフラグを設定
         if self.bot_instance:
             self.bot_instance._stop_requested = True
@@ -1045,57 +1057,6 @@ class BotWorker(QThread):
                 self.bot_instance._closing_intentionally = True
             
             print("Stop requested - killing browser process...")
-            
-            # ブラウザプロセスを強制終了（複数の方法を試行）
-            import subprocess
-            import os
-            import threading
-            
-            # Windows用のsubprocess設定（コンソールなしでも動作）
-            startupinfo = None
-            creationflags = 0
-            if os.name == 'nt':
-                startupinfo = subprocess.STARTUPINFO()
-                startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                startupinfo.wShowWindow = subprocess.SW_HIDE
-                creationflags = subprocess.CREATE_NO_WINDOW
-            
-            def kill_by_pid(pid):
-                """PIDでプロセスを終了"""
-                try:
-                    subprocess.run(
-                        ['taskkill', '/F', '/T', '/PID', str(pid)], 
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        startupinfo=startupinfo,
-                        creationflags=creationflags,
-                        timeout=3
-                    )
-                    print(f"Killed PID: {pid}")
-                except:
-                    pass
-            
-            def kill_playwright_browsers():
-                """Playwrightが起動したブラウザプロセスをすべて終了"""
-                try:
-                    # Playwrightが使用するchrome.exeを検索して終了
-                    # --remote-debugging-port引数を持つChromeプロセスを特定
-                    result = subprocess.run(
-                        ['wmic', 'process', 'where', 
-                         "name='chrome.exe' and commandline like '%--remote-debugging%'", 
-                         'get', 'processid'],
-                        capture_output=True,
-                        text=True,
-                        startupinfo=startupinfo,
-                        creationflags=creationflags,
-                        timeout=3
-                    )
-                    for line in result.stdout.split('\n'):
-                        line = line.strip()
-                        if line.isdigit():
-                            kill_by_pid(int(line))
-                except:
-                    pass
             
             # 方法1: Bot側で保存されたPIDを使用
             browser_pid = None
@@ -1115,45 +1076,67 @@ class BotWorker(QThread):
                 except:
                     pass
             
-            # 別スレッドでkill処理を実行（メインスレッドをブロックしない）
+            # PIDでブラウザを終了（同期的に実行）
             if browser_pid and os.name == 'nt':
-                threading.Thread(target=kill_by_pid, args=(browser_pid,), daemon=True).start()
-            
-            # Playwrightブラウザも別スレッドで終了
-            if os.name == 'nt':
-                threading.Thread(target=kill_playwright_browsers, daemon=True).start()
-            
-            # 方法3: Playwrightのclose()を別スレッドで呼び出す（タイムアウト付き）
-            def close_playwright():
                 try:
-                    if hasattr(self.bot_instance, 'page') and self.bot_instance.page:
-                        try:
-                            self.bot_instance.page.close()
-                        except:
-                            pass
-                    if hasattr(self.bot_instance, 'context') and self.bot_instance.context:
-                        try:
-                            self.bot_instance.context.close()
-                        except:
-                            pass
-                    if hasattr(self.bot_instance, 'browser') and self.bot_instance.browser:
-                        try:
-                            self.bot_instance.browser.close()
-                        except:
-                            pass
-                    if hasattr(self.bot_instance, 'playwright') and self.bot_instance.playwright:
-                        try:
-                            self.bot_instance.playwright.stop()
-                        except:
-                            pass
-                    print("Playwright closed")
-                except:
-                    pass
+                    subprocess.run(
+                        ['taskkill', '/F', '/T', '/PID', str(browser_pid)], 
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        startupinfo=startupinfo,
+                        creationflags=creationflags,
+                        timeout=5
+                    )
+                    print(f"Killed browser PID: {browser_pid}")
+                except Exception as e:
+                    print(f"taskkill failed: {e}")
             
-            # Playwrightのcloseを別スレッドで実行（ハングしてもメインに影響なし）
-            close_thread = threading.Thread(target=close_playwright, daemon=True)
-            close_thread.start()
-            close_thread.join(timeout=2)  # 最大2秒待機
+            # 方法3: PowerShellでPlaywrightのChromeプロセスを検索して終了
+            if os.name == 'nt':
+                try:
+                    # PowerShellで--remote-debuggingを含むchromeプロセスを終了
+                    ps_command = '''
+                    Get-WmiObject Win32_Process -Filter "name='chrome.exe'" | 
+                    Where-Object { $_.CommandLine -like '*--remote-debugging*' } | 
+                    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+                    '''
+                    subprocess.run(
+                        ['powershell', '-WindowStyle', 'Hidden', '-Command', ps_command],
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
+                        startupinfo=startupinfo,
+                        creationflags=creationflags,
+                        timeout=5
+                    )
+                    print("PowerShell killed Playwright browsers")
+                except Exception as e:
+                    print(f"PowerShell kill failed: {e}")
+            
+            # 方法4: Playwrightのclose()を呼び出す
+            try:
+                if hasattr(self.bot_instance, 'page') and self.bot_instance.page:
+                    try:
+                        self.bot_instance.page.close()
+                    except:
+                        pass
+                if hasattr(self.bot_instance, 'context') and self.bot_instance.context:
+                    try:
+                        self.bot_instance.context.close()
+                    except:
+                        pass
+                if hasattr(self.bot_instance, 'browser') and self.bot_instance.browser:
+                    try:
+                        self.bot_instance.browser.close()
+                    except:
+                        pass
+                if hasattr(self.bot_instance, 'playwright') and self.bot_instance.playwright:
+                    try:
+                        self.bot_instance.playwright.stop()
+                    except:
+                        pass
+                print("Playwright closed")
+            except:
+                pass
             
             # 参照をクリア
             try:
@@ -1167,13 +1150,13 @@ class BotWorker(QThread):
         # スレッドを強制終了し、結果を設定
         try:
             # 少し待ってからスレッドを終了
-            self.wait(200)  # 200ms待機（短縮）
+            self.wait(200)  # 200ms待機
             
             if self.isRunning():
                 print("Force terminating worker thread...")
                 self.terminate()  # スレッドを強制終了
                 
-                # 最大2秒待機して終了を確認（短縮）
+                # 最大2秒待機して終了を確認
                 terminated = self.wait(2000)
                 
                 if not terminated and self.isRunning():
