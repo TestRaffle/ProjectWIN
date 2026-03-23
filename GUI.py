@@ -1039,14 +1039,76 @@ class BotWorker(QThread):
         import subprocess
         import os
         
-        # Windows用のsubprocess設定（コンソールなしでも動作）
-        startupinfo = None
-        creationflags = 0
-        if os.name == 'nt':
-            startupinfo = subprocess.STARTUPINFO()
-            startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-            startupinfo.wShowWindow = subprocess.SW_HIDE
-            creationflags = subprocess.CREATE_NO_WINDOW
+        # Windows APIを使ってプロセスを強制終了する関数
+        def kill_process_tree_by_pid(pid):
+            """Windows APIを使ってプロセスツリーを強制終了"""
+            if os.name != 'nt' or not pid:
+                return
+            try:
+                import ctypes
+                from ctypes import wintypes
+                
+                # Windows API定数
+                PROCESS_TERMINATE = 0x0001
+                PROCESS_QUERY_INFORMATION = 0x0400
+                TH32CS_SNAPPROCESS = 0x00000002
+                
+                # 構造体定義
+                class PROCESSENTRY32(ctypes.Structure):
+                    _fields_ = [
+                        ('dwSize', wintypes.DWORD),
+                        ('cntUsage', wintypes.DWORD),
+                        ('th32ProcessID', wintypes.DWORD),
+                        ('th32DefaultHeapID', ctypes.POINTER(ctypes.c_ulong)),
+                        ('th32ModuleID', wintypes.DWORD),
+                        ('cntThreads', wintypes.DWORD),
+                        ('th32ParentProcessID', wintypes.DWORD),
+                        ('pcPriClassBase', ctypes.c_long),
+                        ('dwFlags', wintypes.DWORD),
+                        ('szExeFile', ctypes.c_char * 260),
+                    ]
+                
+                kernel32 = ctypes.windll.kernel32
+                
+                def get_child_pids(parent_pid):
+                    """子プロセスのPIDを取得"""
+                    child_pids = []
+                    snapshot = kernel32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
+                    if snapshot == -1:
+                        return child_pids
+                    
+                    pe32 = PROCESSENTRY32()
+                    pe32.dwSize = ctypes.sizeof(PROCESSENTRY32)
+                    
+                    if kernel32.Process32First(snapshot, ctypes.byref(pe32)):
+                        while True:
+                            if pe32.th32ParentProcessID == parent_pid:
+                                child_pids.append(pe32.th32ProcessID)
+                            if not kernel32.Process32Next(snapshot, ctypes.byref(pe32)):
+                                break
+                    
+                    kernel32.CloseHandle(snapshot)
+                    return child_pids
+                
+                def kill_pid(target_pid):
+                    """単一プロセスを終了"""
+                    handle = kernel32.OpenProcess(PROCESS_TERMINATE, False, target_pid)
+                    if handle:
+                        kernel32.TerminateProcess(handle, 1)
+                        kernel32.CloseHandle(handle)
+                
+                # 子プロセスを再帰的に終了
+                def kill_tree(target_pid):
+                    children = get_child_pids(target_pid)
+                    for child in children:
+                        kill_tree(child)
+                    kill_pid(target_pid)
+                
+                kill_tree(pid)
+                print(f"Killed process tree: {pid}")
+                
+            except Exception as e:
+                print(f"kill_process_tree failed: {e}")
         
         # Bot側にもストップフラグを設定
         if self.bot_instance:
@@ -1076,43 +1138,11 @@ class BotWorker(QThread):
                 except:
                     pass
             
-            # PIDでブラウザを終了（同期的に実行）
-            if browser_pid and os.name == 'nt':
-                try:
-                    subprocess.run(
-                        ['taskkill', '/F', '/T', '/PID', str(browser_pid)], 
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        startupinfo=startupinfo,
-                        creationflags=creationflags,
-                        timeout=5
-                    )
-                    print(f"Killed browser PID: {browser_pid}")
-                except Exception as e:
-                    print(f"taskkill failed: {e}")
+            # Windows APIでプロセスツリーを強制終了
+            if browser_pid:
+                kill_process_tree_by_pid(browser_pid)
             
-            # 方法3: PowerShellでPlaywrightのChromeプロセスを検索して終了
-            if os.name == 'nt':
-                try:
-                    # PowerShellで--remote-debuggingを含むchromeプロセスを終了
-                    ps_command = '''
-                    Get-WmiObject Win32_Process -Filter "name='chrome.exe'" | 
-                    Where-Object { $_.CommandLine -like '*--remote-debugging*' } | 
-                    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
-                    '''
-                    subprocess.run(
-                        ['powershell', '-WindowStyle', 'Hidden', '-Command', ps_command],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        startupinfo=startupinfo,
-                        creationflags=creationflags,
-                        timeout=5
-                    )
-                    print("PowerShell killed Playwright browsers")
-                except Exception as e:
-                    print(f"PowerShell kill failed: {e}")
-            
-            # 方法4: Playwrightのclose()を呼び出す
+            # 方法3: Playwrightのclose()を呼び出す（念のため）
             try:
                 if hasattr(self.bot_instance, 'page') and self.bot_instance.page:
                     try:
