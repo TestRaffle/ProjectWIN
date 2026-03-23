@@ -822,6 +822,7 @@ class BotWorker(QThread):
         self._raffle_results = []
         self.log_lines = []
         self.bot_instance = None  # botインスタンスを保持（stop用）
+        self._current_status = "Idle"  # 現在のステータスを追跡
     
     def get_log(self):
         return "\n".join(self.log_lines)
@@ -841,6 +842,7 @@ class BotWorker(QThread):
         if "\x00STATUS:" in text:
             try:
                 status = text.split("\x00STATUS:")[1].strip()
+                self._current_status = status  # 現在のステータスを追跡
                 self.status_changed.emit(self.row, status)
             except:
                 pass
@@ -850,6 +852,7 @@ class BotWorker(QThread):
         if text.startswith("STATUS:"):
             try:
                 status = text.split("STATUS:")[1].strip()
+                self._current_status = status  # 現在のステータスを追跡
                 self.status_changed.emit(self.row, status)
             except:
                 pass
@@ -1136,7 +1139,15 @@ class BotWorker(QThread):
             # シグナルを発行してUIを更新
             if not hasattr(self, '_signals_emitted'):
                 self._signals_emitted = True
-                self.result_changed.emit(self.row, "Stopped")
+                
+                # Browserモードで Browsing ステータスからストップした場合は Success
+                mode = self.task_data.get("Mode", "").lower()
+                if mode == "browser" and self._current_status == "Browsing":
+                    self.result_changed.emit(self.row, "Success")
+                    print("Browser mode stopped from Browsing - marked as Success")
+                else:
+                    self.result_changed.emit(self.row, "Stopped")
+                
                 self.finished_task.emit(self.row)
                 print("Task stopped and cleaned up")
         except Exception as e:
@@ -1144,7 +1155,14 @@ class BotWorker(QThread):
             # エラーが発生しても確実にシグナルを発行
             if not hasattr(self, '_signals_emitted'):
                 self._signals_emitted = True
-                self.result_changed.emit(self.row, "Stopped")
+                
+                # Browserモードで Browsing ステータスからストップした場合は Success
+                mode = self.task_data.get("Mode", "").lower()
+                if mode == "browser" and self._current_status == "Browsing":
+                    self.result_changed.emit(self.row, "Success")
+                else:
+                    self.result_changed.emit(self.row, "Stopped")
+                
                 self.finished_task.emit(self.row)
 
 
