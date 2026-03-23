@@ -1020,7 +1020,7 @@ class BotWorker(QThread):
             self.finished_task.emit(self.row)
     
     def stop(self):
-        """タスクを停止（フラグを設定）"""
+        """タスクを停止（フラグを設定し、ブラウザプロセスを強制終了）"""
         self._is_running = False
         self._stopped_by_user = True
         self._stop_requested = True
@@ -1028,7 +1028,97 @@ class BotWorker(QThread):
         # Bot側にもストップフラグを設定
         if self.bot_instance:
             self.bot_instance._stop_requested = True
-            print("Stop requested")
+            self.bot_instance._browser_closed = True
+            
+            if hasattr(self.bot_instance, '_closing_intentionally'):
+                self.bot_instance._closing_intentionally = True
+            
+            print("Stop requested - killing browser process...")
+            
+            # ブラウザプロセスを直接killする（スレッドセーフ）
+            try:
+                import subprocess
+                import os
+                
+                browser_pid = None
+                
+                # 方法1: Bot側で保存されたPIDを使用
+                if hasattr(self.bot_instance, '_browser_pid') and self.bot_instance._browser_pid:
+                    browser_pid = self.bot_instance._browser_pid
+                
+                # 方法2: Playwrightの内部からPIDを取得
+                if not browser_pid and hasattr(self.bot_instance, 'browser') and self.bot_instance.browser:
+                    try:
+                        # 複数の取得方法を試す
+                        browser = self.bot_instance.browser
+                        if hasattr(browser, '_impl_obj'):
+                            impl = browser._impl_obj
+                            if hasattr(impl, '_connection') and hasattr(impl._connection, '_transport'):
+                                transport = impl._connection._transport
+                                if hasattr(transport, '_proc') and transport._proc:
+                                    browser_pid = transport._proc.pid
+                    except:
+                        pass
+                
+                if browser_pid:
+                    # Windowsの場合はtaskkillを使用
+                    if os.name == 'nt':
+                        try:
+                            # /T で子プロセスも終了、/F で強制終了
+                            subprocess.run(['taskkill', '/F', '/T', '/PID', str(browser_pid)], 
+                                          capture_output=True, timeout=5)
+                            print(f"Browser process killed (PID: {browser_pid})")
+                        except Exception as e:
+                            print(f"taskkill failed: {e}")
+                    else:
+                        # Linux/Macの場合
+                        try:
+                            import signal
+                            os.killpg(os.getpgid(browser_pid), signal.SIGKILL)
+                            print(f"Browser process killed (PID: {browser_pid})")
+                        except:
+                            try:
+                                os.kill(browser_pid, signal.SIGKILL)
+                                print(f"Browser process killed (PID: {browser_pid})")
+                            except Exception as e:
+                                print(f"kill failed: {e}")
+                else:
+                    print("Browser PID not found, setting flags only")
+                    
+            except Exception as e:
+                print(f"Error in stop: {e}")
+        
+        # スレッドを強制終了し、結果を設定
+        try:
+            # 少し待ってからスレッドを終了（ブラウザ終了を待つ）
+            self.wait(500)  # 500ms待機
+            
+            if self.isRunning():
+                print("Force terminating worker thread...")
+                self.terminate()  # スレッドを強制終了
+                
+                # 最大3秒待機して終了を確認
+                terminated = self.wait(3000)
+                
+                if not terminated and self.isRunning():
+                    print("Warning: Thread still running after terminate")
+                else:
+                    print("Thread terminated successfully")
+                
+            # terminate()で強制終了した場合のみシグナルを発行
+            # （正常終了の場合はrun()内でシグナルが発行される）
+            if not hasattr(self, '_signals_emitted'):
+                self._signals_emitted = True
+                self.result_changed.emit(self.row, "Stopped")
+                self.finished_task.emit(self.row)
+                print("Task stopped and cleaned up")
+        except Exception as e:
+            print(f"Error terminating thread: {e}")
+            # エラーが発生しても確実にシグナルを発行
+            if not hasattr(self, '_signals_emitted'):
+                self._signals_emitted = True
+                self.result_changed.emit(self.row, "Stopped")
+                self.finished_task.emit(self.row)
 
 
 class TaskPage(QWidget):
@@ -8198,12 +8288,6 @@ class SplashScreen(QWidget):
         self._logo_pixmap = None
         self._load_logo()
         self._setup_ui()
-        self._angle = 0
-        
-        # アニメーションタイマー
-        self._timer = QTimer()
-        self._timer.timeout.connect(self._rotate)
-        self._timer.start(50)
     
     def _load_logo(self):
         """GitHubからロゴをダウンロード"""
@@ -8242,12 +8326,10 @@ class SplashScreen(QWidget):
         self.logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         
         if self._logo_pixmap and not self._logo_pixmap.isNull():
-            # ロゴがあれば表示
             scaled = self._logo_pixmap.scaled(90, 90, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
             self.logo_label.setPixmap(scaled)
             self.logo_label.setStyleSheet("background: transparent; border: none;")
         else:
-            # ロゴがなければ四角い枠を表示
             self.logo_label.setStyleSheet("""
                 background: transparent;
                 border: 3px solid #3a3a4a;
@@ -8264,39 +8346,11 @@ class SplashScreen(QWidget):
         
         layout.addWidget(container)
     
-    def _rotate(self):
-        self._angle = (self._angle + 8) % 360
-        self.update()
-    
-    def paintEvent(self, event):
-        super().paintEvent(event)
-        
-        # ロゴがない場合のみ回転する四角を描画
-        if self._logo_pixmap is None or self._logo_pixmap.isNull():
-            painter = QPainter(self)
-            painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-            
-            # 四角の位置を計算
-            logo_rect = self.logo_label.geometry()
-            center_x = logo_rect.x() + logo_rect.width() // 2 + 40
-            center_y = logo_rect.y() + logo_rect.height() // 2 + 35
-            
-            # 回転する四角を描画
-            pen = QPen(QColor("#4a90d9"), 3)
-            pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-            painter.setPen(pen)
-            painter.setBrush(Qt.BrushStyle.NoBrush)
-            painter.translate(center_x, center_y)
-            painter.rotate(self._angle)
-            painter.drawRoundedRect(-35, -35, 70, 70, 12, 12)
-            
-            painter.end()
-    
     def set_message(self, text):
         self.label.setText(text)
     
     def finish(self):
-        self._timer.stop()
+        self.close()
         self.close()
 
 
