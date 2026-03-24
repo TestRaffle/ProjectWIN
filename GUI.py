@@ -1240,6 +1240,8 @@ class TaskPage(QWidget):
         self.all_task_data = []
         self.original_task_data = []  # Excelから読み込んだ元のデータ
         self.pending_tasks = []  # 待機中のタスク（並列制御用）
+        self.sheet_statuses = {}  # シートごとのステータスを保存 {sheet_name: {row: status}}
+        self.current_sheet_name = None  # 現在のシート名
         self.setup_ui()
         self._load_last_excel()
     
@@ -1904,6 +1906,10 @@ class TaskPage(QWidget):
     
     def refresh_tasks(self):
         """タスクリストをリフレッシュ"""
+        # スクロール位置を保存
+        scrollbar = self.task_table.verticalScrollBar()
+        scroll_position = scrollbar.value()
+        
         # 実行中のタスクを停止
         for row in list(self.workers.keys()):
             if self.workers[row].isRunning():
@@ -1914,6 +1920,9 @@ class TaskPage(QWidget):
         if self.current_excel_path and os.path.exists(self.current_excel_path):
             current_sheet = self.sheet_selector.currentText() if self.sheet_selector.isVisible() else None
             self._load_excel_file(self.current_excel_path, show_reload_toast=True, sheet_name=current_sheet)
+            
+            # スクロール位置を復元（テーブル更新後に実行）
+            QTimer.singleShot(50, lambda: scrollbar.setValue(scroll_position))
         else:
             self.toast.show_toast("No file to reload", "warning", 2000)
     
@@ -1977,6 +1986,9 @@ class TaskPage(QWidget):
                 
                 if not rows_data:
                     raise Exception("ファイルのエンコーディングを判定できませんでした")
+                
+                # CSVの場合はシート名を"(CSV)"に設定
+                self.current_sheet_name = "(CSV)"
                 
                 self.task_table.setRowCount(0)
                 self.workers.clear()
@@ -2042,6 +2054,9 @@ class TaskPage(QWidget):
                         self.sheet_selector.setCurrentText(ws.title)
                         self.sheet_selector.blockSignals(False)
                 
+                # 現在のシート名を保存
+                self.current_sheet_name = ws.title
+                
                 self.task_table.setRowCount(0)
                 self.workers.clear()
                 self.all_task_data = []
@@ -2106,9 +2121,63 @@ class TaskPage(QWidget):
         if index < 0 or not self.current_excel_path:
             return
         
-        sheet_name = self.sheet_selector.currentText()
-        if sheet_name:
-            self._load_excel_file(self.current_excel_path, show_toast=True, sheet_name=sheet_name)
+        new_sheet_name = self.sheet_selector.currentText()
+        if not new_sheet_name:
+            return
+        
+        # 現在のシートのステータスを保存（切り替え前のシート）
+        self._save_current_sheet_statuses()
+        
+        # 新しいシートを読み込み
+        self._load_excel_file(self.current_excel_path, show_toast=True, sheet_name=new_sheet_name)
+        
+        # 新しいシートのステータスを復元
+        self._restore_sheet_statuses(new_sheet_name)
+    
+    def _save_current_sheet_statuses(self):
+        """現在のシートのステータスを保存"""
+        if not self.current_sheet_name:
+            return
+        
+        statuses = {}
+        for row in range(self.task_table.rowCount()):
+            # Status列はウィジェットなのでcellWidgetから取得
+            status_widget = self.task_table.cellWidget(row, 6)
+            if status_widget:
+                status_label = status_widget.findChild(QLabel, "status_label")
+                if status_label:
+                    statuses[row] = status_label.text()
+        
+        if statuses:
+            self.sheet_statuses[self.current_sheet_name] = statuses
+    
+    def _restore_sheet_statuses(self, sheet_name):
+        """指定シートのステータスを復元"""
+        if sheet_name not in self.sheet_statuses:
+            return
+        
+        statuses = self.sheet_statuses[sheet_name]
+        for row, status in statuses.items():
+            if row < self.task_table.rowCount():
+                # Status列はウィジェットなのでcellWidgetから取得
+                status_widget = self.task_table.cellWidget(row, 6)
+                if status_widget:
+                    status_label = status_widget.findChild(QLabel, "status_label")
+                    if status_label:
+                        status_label.setText(status)
+                        # ステータスに応じた色を設定
+                        if status == "Success":
+                            status_label.setStyleSheet("color: #4CAF50; background-color: transparent; margin: 0px; padding: 0px;")
+                        elif status == "Error":
+                            status_label.setStyleSheet("color: #FF6B6B; background-color: transparent; margin: 0px; padding: 0px;")
+                        elif status == "Running":
+                            status_label.setStyleSheet("color: #2196F3; background-color: transparent; margin: 0px; padding: 0px;")
+                        elif status == "Stopped":
+                            status_label.setStyleSheet("color: #FFA726; background-color: transparent; margin: 0px; padding: 0px;")
+                        elif status == "Browsing":
+                            status_label.setStyleSheet("color: #9C27B0; background-color: transparent; margin: 0px; padding: 0px;")
+                        else:
+                            status_label.setStyleSheet("color: #888888; background-color: transparent; margin: 0px; padding: 0px;")
     
     def add_task_row(self, profile, site, mode, url, proxy):
         """タスク行を追加"""
