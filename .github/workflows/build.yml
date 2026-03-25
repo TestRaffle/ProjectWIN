@@ -22,7 +22,8 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install nuitka pyside6 pycryptodome pillow ordered-set zstandard openpyxl requests beautifulsoup4 lxml faker
+        pip install nuitka pyside6 playwright pycryptodome pillow ordered-set zstandard openpyxl requests beautifulsoup4 lxml faker
+        playwright install chromium
       shell: cmd
     
     - name: Build with Nuitka
@@ -42,7 +43,6 @@ jobs:
           --include-module=lxml ^
           --include-module=faker ^
           --include-module=openpyxl ^
-          --nofollow-import-to=playwright ^
           GUI.py
       shell: cmd
     
@@ -50,7 +50,7 @@ jobs:
       run: |
         xcopy /E /I GUI.dist release
         ren release\GUI.exe ProjectWIN.exe
-        if exist release\playwright rmdir /s /q release\playwright
+        if exist release\playwright\driver rmdir /s /q release\playwright\driver
         mkdir release\_internal
         mkdir release\_internal\settings
         mkdir release\_internal\cookies
