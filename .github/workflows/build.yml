@@ -24,7 +24,6 @@ jobs:
         python -m pip install --upgrade pip
         pip install nuitka pyside6 playwright pycryptodome pillow ordered-set zstandard openpyxl requests beautifulsoup4 lxml faker
         playwright install chromium
-      shell: cmd
     
     - name: Build with Nuitka
       run: |
@@ -48,14 +47,20 @@ jobs:
     
     - name: Prepare release files
       run: |
+        rem standaloneビルドの出力フォルダからコピー
         xcopy /E /I GUI.dist release
+        
+        rem exeの名前を変更
         ren release\GUI.exe ProjectWIN.exe
-        if exist release\playwright\driver rmdir /s /q release\playwright\driver
+        
+        rem _internalフォルダを作成（botsはサーバーからDLするので不要）
         mkdir release\_internal
         mkdir release\_internal\settings
         mkdir release\_internal\cookies
         mkdir release\_internal\cookies\Amazon
         mkdir release\_internal\cookies\iCloud
+        
+        rem version.jsonを作成（タグからvを除去）
         set VERSION=${{ github.ref_name }}
         set VERSION=%VERSION:v=%
         echo {"version": "%VERSION%"} > release\_internal\version.json
