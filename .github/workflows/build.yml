@@ -23,9 +23,7 @@ jobs:
       run: |
         python -m pip install --upgrade pip
         pip install nuitka pyside6 pycryptodome pillow ordered-set zstandard openpyxl requests beautifulsoup4 lxml faker
-        rem playwrightはビルドに含めない（ユーザーのシステムにインストールされたものを使用）
-        rem pip install playwright
-        rem playwright install chromium
+      shell: cmd
     
     - name: Build with Nuitka
       run: |
@@ -50,23 +48,14 @@ jobs:
     
     - name: Prepare release files
       run: |
-        rem standaloneビルドの出力フォルダからコピー
         xcopy /E /I GUI.dist release
-        
-        rem exeの名前を変更
         ren release\GUI.exe ProjectWIN.exe
-        
-        rem playwrightフォルダがあれば削除（ビルドに含まれてしまった場合）
         if exist release\playwright rmdir /s /q release\playwright
-        
-        rem _internalフォルダを作成（botsはサーバーからDLするので不要）
         mkdir release\_internal
         mkdir release\_internal\settings
         mkdir release\_internal\cookies
         mkdir release\_internal\cookies\Amazon
         mkdir release\_internal\cookies\iCloud
-        
-        rem version.jsonを作成（タグからvを除去）
         set VERSION=${{ github.ref_name }}
         set VERSION=%VERSION:v=%
         echo {"version": "%VERSION%"} > release\_internal\version.json
