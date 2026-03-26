@@ -28,7 +28,14 @@ jobs:
     
     - name: Build with PyInstaller
       run: |
-        pyinstaller --noconfirm --onedir --console --name ProjectWIN --icon Logo.ico GUI.py
+        pyinstaller --noconfirm --onedir --console --name ProjectWIN --icon Logo.ico ^
+          --hidden-import=playwright ^
+          --hidden-import=playwright.sync_api ^
+          --hidden-import=playwright.async_api ^
+          --hidden-import=playwright._impl ^
+          --hidden-import=playwright._impl._driver ^
+          --collect-all=playwright ^
+          GUI.py
       shell: cmd
     
     - name: Prepare release files
