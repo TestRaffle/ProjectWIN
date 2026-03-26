@@ -22,45 +22,23 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install nuitka pyside6 playwright pycryptodome pillow ordered-set zstandard openpyxl requests beautifulsoup4 lxml faker
+        pip install pyinstaller pyside6 playwright pycryptodome pillow ordered-set zstandard openpyxl requests beautifulsoup4 lxml faker
         playwright install chromium
+      shell: cmd
     
-    - name: Build with Nuitka
+    - name: Build with PyInstaller
       run: |
-        python -m nuitka ^
-          --standalone ^
-          --windows-console-mode=attach ^
-          --windows-icon-from-ico=Logo.ico ^
-          --enable-plugin=pyside6 ^
-          --assume-yes-for-downloads ^
-          --include-module=requests ^
-          --include-module=urllib3 ^
-          --include-module=charset_normalizer ^
-          --include-module=certifi ^
-          --include-module=idna ^
-          --include-module=bs4 ^
-          --include-module=lxml ^
-          --include-module=faker ^
-          --include-module=openpyxl ^
-          GUI.py
+        pyinstaller --noconfirm --onedir --console --name ProjectWIN --icon Logo.ico GUI.py
       shell: cmd
     
     - name: Prepare release files
       run: |
-        rem standaloneビルドの出力フォルダからコピー
-        xcopy /E /I GUI.dist release
-        
-        rem exeの名前を変更
-        ren release\GUI.exe ProjectWIN.exe
-        
-        rem _internalフォルダを作成（botsはサーバーからDLするので不要）
+        xcopy /E /I dist\ProjectWIN release
         mkdir release\_internal
         mkdir release\_internal\settings
         mkdir release\_internal\cookies
         mkdir release\_internal\cookies\Amazon
         mkdir release\_internal\cookies\iCloud
-        
-        rem version.jsonを作成（タグからvを除去）
         set VERSION=${{ github.ref_name }}
         set VERSION=%VERSION:v=%
         echo {"version": "%VERSION%"} > release\_internal\version.json
